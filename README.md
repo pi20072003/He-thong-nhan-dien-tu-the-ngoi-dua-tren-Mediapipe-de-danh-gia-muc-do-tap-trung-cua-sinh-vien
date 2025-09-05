@@ -1,0 +1,2 @@
+# He-thong-nhan-dien-tu-the-ngoi-dua-tren-Mediapipe-de-danh-gia-muc-do-tap-trung-cua-sinh-vien
+Hệ thống sử dụng thị giác máy tính để nhận dạng tư thế ngồi của sinh viên trong lớp học trực tiếp hoặc trực tuyến, từ đó đánh giá mức độ tập trung dựa trên các tư thế ngồi. Hệ thống sử dụng thư viện MediaPipe Pose để phát hiện các điểm mốc cơ thể và phân loại tư thế. Kết quả sẽ cung cấp phản hồi thời gian thực cho giáo viên/sinh viên.
