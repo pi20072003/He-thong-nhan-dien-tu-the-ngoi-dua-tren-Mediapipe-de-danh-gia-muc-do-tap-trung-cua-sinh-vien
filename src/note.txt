@@ -1,5 +1,5 @@
 """
-                     LƯU Ý 
+================= LƯU Ý =================
 
 1. Phiên bản thư viện (cực quan trọng):
       TensorFlow: 2.15.0
@@ -28,4 +28,5 @@
    - git pull origin main --rebase  # (nếu có khả năng repo trên GitHub đã có commit mới)
    - git push
 
+=======================================================================
 """
