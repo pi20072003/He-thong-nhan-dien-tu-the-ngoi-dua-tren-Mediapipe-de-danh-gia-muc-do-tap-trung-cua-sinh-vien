@@ -97,6 +97,4 @@ def main():
     print(f"Saved labels to {LABELS_PATH}")
 
 if __name__ == "__main__":
-    # In phiên bản để bạn kiểm tra nhanh môi trường
-    print("TensorFlow:", tf.__version__)
     main()
