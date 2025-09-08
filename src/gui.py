@@ -650,30 +650,30 @@ class PostureMonitoringGUI:
     
     def check_alerts(self, posture):
         """Kiểm tra và tạo cảnh báo"""
+        current_time = datetime.now()
+        # Chỉ cảnh báo nếu đã qua thời gian cooldown
+        if self.last_alert_time and \
+           (current_time - self.last_alert_time).total_seconds() < self.alert_cooldown_seconds:
+            return  # Bỏ qua nếu chưa đủ thời gian
+
+        self.last_alert_time = current_time  # Cập nhật thời gian cảnh báo cuối
+
+        # Tên cảnh báo tiếng Việt
+        alert_names = {
+            "guc dau": "Tư thế không tốt: Cúi đầu",
+            "nga nguoi": "Tư thế không tốt: Ngả người",
+            "ngoi thang": "Tư thế tốt: Ngồi thẳng"
+        }
+
+        alert_message = alert_names.get(posture, f"Tư thế: {posture}")
+
+        # Thêm vào danh sách cảnh báo gần đây
+        self.recent_alerts.appendleft((current_time, alert_message))
         if posture != "ngoi thang":
-            current_time = datetime.now()
-            
-            # Chỉ cảnh báo nếu đã qua thời gian cooldown
-            if self.last_alert_time and \
-               (current_time - self.last_alert_time).total_seconds() < self.alert_cooldown_seconds:
-                return  # Bỏ qua nếu chưa đủ thời gian
-            
-            self.last_alert_time = current_time  # Cập nhật thời gian cảnh báo cuối
-            
-            # Tên cảnh báo tiếng Việt
-            alert_names = {
-                "guc dau": "Tư thế không tốt: Cúi đầu",
-                "nga nguoi": "Tư thế không tốt: Ngả người"
-            }
-            
-            alert_message = alert_names.get(posture, f"Tư thế không tốt: {posture}")
-            
-            # Thêm vào danh sách cảnh báo gần đây
-            self.recent_alerts.appendleft((current_time, alert_message))
-            self.alerts_count += 1
-            
-            # Cập nhật hiển thị cảnh báo
-            self.root.after(0, self.update_alerts_display)
+            self.alerts_count += 1  # Chỉ tăng số cảnh báo với tư thế xấu
+
+        # Cập nhật hiển thị cảnh báo
+        self.root.after(0, self.update_alerts_display)
     
     def update_alerts_display(self):
         """Cập nhật panel cảnh báo"""
@@ -689,30 +689,35 @@ class PostureMonitoringGUI:
             self.no_alerts_label.pack(pady=15)
         else:
             for alert_time, message in list(self.recent_alerts)[:3]:  # Chỉ hiển thị 3 cảnh báo mới nhất
-                alert_frame = tk.Frame(self.alerts_container, bg='#fef2f2', relief='flat', bd=1)
+                # Xác định màu theo loại cảnh báo
+                if "Ngồi thẳng" in message:
+                    bg_color = '#d1fae5'   # Xanh lá nhạt
+                    fg_color = '#059669'   # Xanh lá đậm
+                    icon = "✅"
+                else:
+                    bg_color = '#fef2f2'   # Đỏ nhạt
+                    fg_color = '#dc2626'   # Đỏ đậm
+                    icon = "⚠️"
+                
+                alert_frame = tk.Frame(self.alerts_container, bg=bg_color, relief='flat', bd=1)
                 alert_frame.pack(fill='x', padx=3, pady=1)
                 
                 # Biểu tượng cảnh báo
-                tk.Label(alert_frame, text="⚠️", font=('Segoe UI', 9),
-                        bg='#fef2f2').pack(side='left', padx=(8, 5), pady=8)
+                tk.Label(alert_frame, text=icon, font=('Segoe UI', 9),
+                        bg=bg_color).pack(side='left', padx=(8, 5), pady=8)
                 
                 # Nội dung cảnh báo
-                content_frame = tk.Frame(alert_frame, bg='#fef2f2')
+                content_frame = tk.Frame(alert_frame, bg=bg_color)
                 content_frame.pack(side='left', fill='both', expand=True, pady=8)
                 
                 tk.Label(content_frame, text=message, 
                         font=('Segoe UI', 8, 'bold'),
-                        fg='#dc2626', bg='#fef2f2').pack(anchor='w')
+                        fg=fg_color, bg=bg_color).pack(anchor='w')
                 
-                time_ago = (datetime.now() - alert_time).seconds // 60
-                if time_ago == 0:
-                    time_text = "Vừa xong"
-                else:
-                    time_text = f"{time_ago} phút trước"
-                    
+                time_text = alert_time.strftime("%H:%M:%S")
                 tk.Label(content_frame, text=time_text, 
                         font=('Segoe UI', 7),
-                        fg='#7f1d1d', bg='#fef2f2').pack(anchor='w')
+                        fg='#374151', bg=bg_color).pack(anchor='w')
     
     def start_timer(self):
         """Bắt đầu timer phiên làm việc"""
@@ -776,9 +781,9 @@ class PostureMonitoringGUI:
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write("PostureGuard Pro - Báo cáo tư thế\n")
                     f.write("=" * 40 + "\n")
-                    f.write(f"Thời gian phiên: {self.session_time // 60} phút\n")
+                    f.write(f"Thời gian quay: {self.session_time // 60} phút\n")
                     f.write(f"Số cảnh báo: {self.alerts_count}\n")
-                    f.write(f"Tư thế hiện tại: {self.current_posture}\n")
+                    f.write(f"Tư thế cuối cùng phát hiện: {self.current_posture}\n")
                 messagebox.showinfo("Xuất báo cáo", f"Báo cáo đã được lưu: {file_path}")
         except Exception as e:
             messagebox.showerror("Lỗi", f"Không thể xuất báo cáo: {e}")
