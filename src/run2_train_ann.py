@@ -30,6 +30,9 @@ LABELS = {
     0: "ngoi thang",
     1: "guc dau",
     2: "nga nguoi",
+    3: "quay trai",
+    4: "quay phai",
+    5: "chong tay",
 }
 
 def build_model(input_dim: int, n_classes: int = 10) -> keras.Model:

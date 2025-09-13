@@ -10,6 +10,9 @@ LABELS :
     0: "ngoi thang",
     1: "guc dau",
     2: "nga nguoi",
+    3: "quay trai",
+    4: "quay phai",
+    5: "chong tay",
 
 """
 
@@ -26,6 +29,9 @@ LABELS = {
     0: "ngoi thang",
     1: "guc dau",
     2: "nga nguoi",
+    3: "quay trai",
+    4: "quay phai",
+    5: "chong tay",
 }
 
 # ----- Tạo header CSV nếu chưa có -----
@@ -54,7 +60,7 @@ def main():
         raise RuntimeError("Không mở được webcam.")
 
     current_label = 0
-    print("Nhấn phím số (0-2) để chọn nhãn; nhấn 's' để lưu 1 mẫu; ESC để thoát.")
+    print("Nhấn phím số (0-5) để chọn nhãn; nhấn 's' để lưu 1 mẫu; ESC để thoát.")
 
     with mp_pose.Pose(
         static_image_mode=False,
@@ -77,7 +83,7 @@ def main():
             # HUD
             cv2.putText(frame, f"Label [{current_label}]: {LABELS[current_label]}",
                         (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2)
-            cv2.putText(frame, "Press number 0-2 to change label, 's' to save, ESC to quit",
+            cv2.putText(frame, "Press number 0-5 to change label, 's' to save, ESC to quit",
                         (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
 
             cv2.imshow("Pose Capture", frame)

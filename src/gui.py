@@ -627,11 +627,21 @@ class PostureMonitoringGUI:
         self.camera_label.image = image  # Keep reference
     
     def update_posture_display(self):
-        """Cập nhật thông tin tư thế"""
+        """Cập nhật thông tin tư thế
+            0: "ngoi thang",
+            1: "guc dau",
+            2: "nga nguoi",
+            3: "quay trai",
+            4: "quay phai",
+            5: "chong tay",
+        """
         posture_names = {
             "ngoi thang": "Ngồi thẳng",
             "guc dau": "Cúi đầu", 
             "nga nguoi": "Ngả người",
+            "quay trai": "Quay trái",
+            "quay phai": "Quay phải",
+            "chong tay": "Chống tay",
             "unknown": "Chưa xác định"
         }
         
@@ -662,7 +672,10 @@ class PostureMonitoringGUI:
         alert_names = {
             "guc dau": "Tư thế không tốt: Cúi đầu",
             "nga nguoi": "Tư thế không tốt: Ngả người",
-            "ngoi thang": "Tư thế tốt: Ngồi thẳng"
+            "ngoi thang": "Tư thế tốt: Ngồi thẳng",
+            "quay trai": "Tư thế không tốt: Quay trái",
+            "quay phai": "Tư thế không tốt: Quay phải",
+            "chong tay": "Tư thế không tốt: Chống tay"
         }
 
         alert_message = alert_names.get(posture, f"Tư thế: {posture}")
