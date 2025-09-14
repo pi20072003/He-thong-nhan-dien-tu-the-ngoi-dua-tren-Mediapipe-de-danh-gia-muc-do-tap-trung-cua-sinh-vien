@@ -1,6 +1,6 @@
 """
-PostureGuard Pro - Giao diện giám sát tư thế thông minh
-Phiên bản tối ưu với camera cố định và responsive
+Giao diện giám sát tư thế thông minh
+
 """
 
 import tkinter as tk
@@ -27,7 +27,7 @@ except ImportError:
 class PostureMonitoringGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("PostureGuard Pro - Hệ Thống Giám Sát Tư Thế")
+        self.root.title("Hệ Thống Giám Sát Tư Thế")
         
         # Tự động điều chỉnh kích thước theo màn hình
         self.setup_window_size()
@@ -48,7 +48,7 @@ class PostureMonitoringGUI:
         self.alerts_count = 0
         
         self.last_alert_time = None
-        self.alert_cooldown_seconds = 5  # Chỉ cảnh báo 1 lần mỗi 10 giây
+        self.alert_cooldown_seconds = 5  # Chỉ cảnh báo 1 lần mỗi 5 giây
         
         # Lưu trữ dữ liệu
         self.posture_history = deque(maxlen=100)
@@ -58,7 +58,8 @@ class PostureMonitoringGUI:
         # Các thành phần mô hình
         self.model = None
         self.scaler = None
-        self.labels = {"0": "ngoi thang", "1": "guc dau", "2": "nga nguoi"}
+        self.labels = {"0": "ngoi thang", "1": "guc dau", "2": "nga nguoi",
+                       "3": "quay trai", "4": "quay phai", "5": "chong tay"}
         
         # Camera
         self.cap = None
@@ -75,6 +76,9 @@ class PostureMonitoringGUI:
         self.setup_gui()
         self.load_model()
         self.start_timer()
+        
+        # Danh sách lưu trữ các nhãn cảnh báo
+        self.alert_labels = []
     
     def setup_window_size(self):
         """Tự động điều chỉnh kích thước cửa sổ theo màn hình"""
@@ -102,42 +106,26 @@ class PostureMonitoringGUI:
         self.window_height = height
     
     def setup_gui(self):
-        # Main container với scrollbar
+        # Main container
         main_container = tk.Frame(self.root, bg='#f8fafc')
         main_container.pack(fill='both', expand=True)
-        
-        # Scrollable container
-        canvas = tk.Canvas(main_container, bg='#f8fafc', highlightthickness=0)
-        scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, bg='#f8fafc')
-        
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
-        # Cuộn bằng chuột
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
-        
+
+        self.create_header(main_container)
+
+        # Không tạo canvas và scrollbar nữa, chỉ dùng frame thường
+        content_frame = tk.Frame(main_container, bg='#f8fafc')
+        content_frame.pack(fill='both', expand=True)
+
         # Content
-        self.create_header(scrollable_frame)
-        self.create_main_content(scrollable_frame)
+        self.create_main_content(content_frame)
     
     def create_header(self, parent):
-        """Tạo header compact"""
+        """Tạo header compact với trạng thái làm việc"""
         header_frame = tk.Frame(parent, bg='#f8fafc')
-        header_frame.pack(fill='x', padx=20, pady=(20, 15))
+        header_frame.pack(fill='x', padx=20, pady=0)
         
         # Title
-        title_label = tk.Label(header_frame, text="PostureGuard Pro", 
+        title_label = tk.Label(header_frame, text="Hệ thống giám sát ", 
                               font=('Segoe UI', 18, 'bold'), 
                               fg='#1f2937', bg='#f8fafc')
         title_label.pack(side='left')
@@ -148,39 +136,62 @@ class PostureMonitoringGUI:
                                  fg='#6b7280', bg='#f8fafc')
         subtitle_label.pack(side='left', padx=(15, 0))
         
-        # Status indicator
+        # Status indicator phía bên phải header
         self.status_frame = tk.Frame(header_frame, bg='#f8fafc')
         self.status_frame.pack(side='right')
-        
         self.status_indicator = tk.Label(self.status_frame, text="●", 
                                         font=('Segoe UI', 14), 
                                         fg='#ef4444', bg='#f8fafc')
         self.status_indicator.pack(side='left')
-        
         self.status_text = tk.Label(self.status_frame, text="Dừng", 
                                    font=('Segoe UI', 10, 'bold'), 
                                    fg='#374151', bg='#f8fafc')
         self.status_text.pack(side='left', padx=(5, 0))
     
     def create_main_content(self, parent):
-        """Tạo nội dung chính với camera CỐ ĐỊNH"""
+        """Tạo nội dung chính với camera CỐ ĐỊNH và bố cục mới"""
         content_frame = tk.Frame(parent, bg='#f8fafc')
-        content_frame.pack(fill='both', expand=True, padx=20, pady=10)
+        content_frame.pack(fill='both', expand=True, padx=20, pady=0)
         
-        # Left column (65% width) - CỐ ĐỊNH cho camera
+        # Left column (camera)
         left_column = tk.Frame(content_frame, bg='#f8fafc')
-        left_column.pack(side='left', fill='y', padx=(0, 15))  # Chỉ fill='y' để cố định chiều ngang
-        
-        # Right column (35% width)
-        right_column = tk.Frame(content_frame, bg='#f8fafc', width=350)
-        right_column.pack(side='right', fill='both', expand=True)
-        
-        # Setup content
+        left_column.pack(side='left', fill='y', padx=(0, 15))
         self.setup_camera_section(left_column)
-        self.setup_session_stats(left_column)
         
-        # Right column with scroll
-        self.setup_right_column_scroll(right_column)
+        # Right column (cảnh báo + thống kê phiên làm việc)
+        right_column = tk.Frame(content_frame, bg='#f8fafc')
+        right_column.pack(side='left', fill='y', padx=(0, 15))
+        
+        # KHÔNG tạo status_frame ở đây nữa
+        
+        # Ô cảnh báo
+        self.setup_alerts_panel(right_column)
+        
+        # Ô thống kê phiên làm việc
+        stats_frame = self.create_card(right_column, "Thống kê phiên làm việc")
+        stats_frame.pack(fill='x', pady=(0, 15))
+        stats_container = tk.Frame(stats_frame, bg='white')
+        stats_container.pack(fill='x', padx=15, pady=(0, 15))
+        time_frame = self.create_stat_box(stats_container, "00:00:00", "Thời gian làm việc", '#3b82f6', '#dbeafe')
+        time_frame.pack(fill='x', pady=(0, 8))
+        self.session_time_label = time_frame.children['!label']
+        good_frame = self.create_stat_box(stats_container, "0%", "Tư thế tốt", '#10b981', '#d1fae5')
+        good_frame.pack(fill='x', pady=(0, 8))
+        self.good_posture_label = good_frame.children['!label']
+        alert_frame = self.create_stat_box(stats_container, "0", "Cảnh báo", '#ef4444', '#fee2e2')
+        alert_frame.pack(fill='x', pady=(0, 8))
+        self.alerts_count_label = alert_frame.children['!label']
+        
+        # Cột phải phụ (thống kê nhanh, lịch sử, cài đặt)
+        right_side_column = tk.Frame(content_frame, bg='#f8fafc')
+        right_side_column.pack(side='left', fill='y', padx=(0, 15))
+        
+        # Ô thống kê nhanh
+        self.setup_quick_stats(right_side_column)
+        # Ô lịch sử gần đây
+        self.setup_recent_history(right_side_column)
+        # Ô cài đặt
+        self.setup_settings_panel(right_side_column)
     
     def setup_camera_section(self, parent):
         """Camera section với vùng CỐ ĐỊNH TUYỆT ĐỐI"""
@@ -211,8 +222,8 @@ class PostureMonitoringGUI:
         camera_container_outer.pack(fill='x', padx=15, pady=(0, 15))
         
         # Tính kích thước camera tối ưu nhưng CỐ ĐỊNH
-        base_width = min(int(self.window_width * 0.55), 700)  # Tối đa 700px
-        base_height = int(base_width * 9 / 16)  # 16:9 ratio
+        base_width = min(int(self.window_width * 0.5), 700)  # Tối đa 700px
+        base_height = int(base_width * 3 / 4)  # 4:3 ratio
         
         # Container camera với kích thước CỐ ĐỊNH TUYỆT ĐỐI
         self.camera_container = tk.Frame(camera_container_outer, 
@@ -313,7 +324,6 @@ class PostureMonitoringGUI:
         right_canvas.bind("<MouseWheel>", _on_right_mousewheel)
         
         # Right column content
-        self.setup_alerts_panel(right_scrollable)
         self.setup_quick_stats(right_scrollable)
         self.setup_recent_history(right_scrollable)
         self.setup_settings_panel(right_scrollable)
@@ -323,8 +333,10 @@ class PostureMonitoringGUI:
         alerts_frame = self.create_card(parent, "Cảnh báo")
         alerts_frame.pack(fill='x', pady=(0, 12))
         
-        self.alerts_container = tk.Frame(alerts_frame, bg='white')
+        
+        self.alerts_container = tk.Frame(alerts_frame, bg='white', width=220, height=200)
         self.alerts_container.pack(fill='x', padx=15, pady=(0, 15))
+        self.alerts_container.pack_propagate(False)
         
         # Default message
         self.no_alerts_label = tk.Label(self.alerts_container, 
@@ -487,7 +499,11 @@ class PostureMonitoringGUI:
             if not self.cap.isOpened():
                 messagebox.showerror("Lỗi", "Không thể mở camera!")
                 return
-            
+            '''
+            # Thiết lập độ phân giải 720p cho webcam
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT,1080)
+            '''
             self.is_monitoring = True
             self.session_start_time = time.time()
             self.session_time = 0
@@ -689,48 +705,59 @@ class PostureMonitoringGUI:
         self.root.after(0, self.update_alerts_display)
     
     def update_alerts_display(self):
-        """Cập nhật panel cảnh báo"""
-        # Xóa cảnh báo hiện có
-        for widget in self.alerts_container.winfo_children():
-            widget.destroy()
-        
-        if not self.recent_alerts:
-            self.no_alerts_label = tk.Label(self.alerts_container, 
-                                           text="Không có cảnh báo mới", 
-                                           font=('Segoe UI', 9),
-                                           fg='#6b7280', bg='white')
-            self.no_alerts_label.pack(pady=15)
-        else:
-            for alert_time, message in list(self.recent_alerts)[:3]:  # Chỉ hiển thị 3 cảnh báo mới nhất
-                # Xác định màu theo loại cảnh báo
+        """Cập nhật panel cảnh báo mà không destroy toàn bộ widget"""
+        max_alerts = 3
+        alerts = list(self.recent_alerts)[:max_alerts]
+
+        # Nếu chưa có đủ label, tạo thêm
+        while len(self.alert_labels) < max_alerts:
+            frame = tk.Frame(self.alerts_container, bg='white')
+            frame.pack(fill='x', expand=True, padx=3, pady=4)
+            icon_label = tk.Label(frame, font=('Segoe UI', 12), bg='white')
+            icon_label.pack(side='left', padx=(8, 5), pady=8)
+            content_frame = tk.Frame(frame, bg='white')
+            content_frame.pack(side='left', fill='both', expand=True, pady=8)
+            msg_label = tk.Label(content_frame, font=('Segoe UI', 9, 'bold'), bg='white', anchor='w')
+            msg_label.pack(fill='x', expand=True, anchor='w')
+            time_label = tk.Label(content_frame, font=('Segoe UI', 8), bg='white', anchor='w')
+            time_label.pack(fill='x', anchor='w')
+            self.alert_labels.append((frame, icon_label, msg_label, time_label))
+
+        # Cập nhật nội dung các label
+        for i in range(max_alerts):
+            if i < len(alerts):
+                alert_time, message = alerts[i]
                 if "Ngồi thẳng" in message:
-                    bg_color = '#d1fae5'   # Xanh lá nhạt
-                    fg_color = '#059669'   # Xanh lá đậm
+                    bg_color = '#d1fae5'
+                    fg_color = '#059669'
                     icon = "✅"
                 else:
-                    bg_color = '#fef2f2'   # Đỏ nhạt
-                    fg_color = '#dc2626'   # Đỏ đậm
+                    bg_color = '#fef2f2'
+                    fg_color = '#dc2626'
                     icon = "⚠️"
-                
-                alert_frame = tk.Frame(self.alerts_container, bg=bg_color, relief='flat', bd=1)
-                alert_frame.pack(fill='x', padx=3, pady=1)
-                
-                # Biểu tượng cảnh báo
-                tk.Label(alert_frame, text=icon, font=('Segoe UI', 9),
-                        bg=bg_color).pack(side='left', padx=(8, 5), pady=8)
-                
-                # Nội dung cảnh báo
-                content_frame = tk.Frame(alert_frame, bg=bg_color)
-                content_frame.pack(side='left', fill='both', expand=True, pady=8)
-                
-                tk.Label(content_frame, text=message, 
-                        font=('Segoe UI', 8, 'bold'),
-                        fg=fg_color, bg=bg_color).pack(anchor='w')
-                
-                time_text = alert_time.strftime("%H:%M:%S")
-                tk.Label(content_frame, text=time_text, 
-                        font=('Segoe UI', 7),
-                        fg='#374151', bg=bg_color).pack(anchor='w')
+                frame, icon_label, msg_label, time_label = self.alert_labels[i]
+                frame.config(bg=bg_color)
+                icon_label.config(text=icon, bg=bg_color)
+                content_frame = icon_label.master.children[list(icon_label.master.children.keys())[1]]
+                content_frame.config(bg=bg_color)
+                msg_label.config(text=message, fg=fg_color, bg=bg_color)
+                time_label.config(text=alert_time.strftime("%H:%M:%S"), fg='#374151', bg=bg_color)
+                frame.pack(fill='x', expand=True, padx=3, pady=4)
+            else:
+                frame, _, _, _ = self.alert_labels[i]
+                frame.pack_forget()
+
+        # Nếu không có cảnh báo, hiển thị label mặc định
+        if not alerts:
+            if not hasattr(self, 'no_alerts_label') or not self.no_alerts_label.winfo_ismapped():
+                self.no_alerts_label = tk.Label(self.alerts_container, 
+                                                text="Không có cảnh báo mới", 
+                                                font=('Segoe UI', 9),
+                                                fg='#6b7280', bg='white')
+                self.no_alerts_label.pack(pady=15)
+        else:
+            if hasattr(self, 'no_alerts_label') and self.no_alerts_label.winfo_ismapped():
+                self.no_alerts_label.pack_forget()
     
     def start_timer(self):
         """Bắt đầu timer phiên làm việc"""
@@ -792,7 +819,7 @@ class PostureMonitoringGUI:
             )
             if file_path:
                 with open(file_path, 'w', encoding='utf-8') as f:
-                    f.write("PostureGuard Pro - Báo cáo tư thế\n")
+                    f.write("Báo cáo tư thế\n")
                     f.write("=" * 40 + "\n")
                     f.write(f"Thời gian quay: {self.session_time // 60} phút\n")
                     f.write(f"Số cảnh báo: {self.alerts_count}\n")
@@ -839,11 +866,11 @@ class PostureMonitoringGUI:
     
     def show_help(self):
         """Hiển thị hướng dẫn"""
-        help_text = """PostureGuard Pro - Hướng dẫn sử dụng:
+        help_text = """Hướng dẫn sử dụng:
 
 1. Bắt đầu giám sát:
    - Bấm nút "Bắt đầu giám sát"
-   - Ngồi thẳng trước camera
+   - Ngồi thẳng và điều chỉnh góc cam hợp lý
    - Hệ thống sẽ tự động phân tích tư thế
 
 2. Theo dõi thống kê:
@@ -855,6 +882,8 @@ class PostureMonitoringGUI:
    - Ngồi thẳng: Tư thế tốt
    - Cúi đầu: Cần điều chỉnh
    - Ngả người: Cần điều chỉnh
+   - Quay trái/phải: Cần điều chỉnh
+   - Chống tay: Cần điều chỉnh
 
 Lưu ý: Ngồi cách camera 60-100cm để đạt độ chính xác tốt nhất."""
         
@@ -882,7 +911,7 @@ Lưu ý: Ngồi cách camera 60-100cm để đạt độ chính xác tốt nhấ
     
     def show_about(self):
         """Hiển thị thông tin ứng dụng"""
-        about_text = """PostureGuard Pro v1.0
+        about_text = """Hệ thống giám sát  v1.0
 
 Hệ thống giám sát tư thế thông minh sử dụng AI
 để phân tích và cảnh báo tư thế ngồi không đúng.
@@ -893,10 +922,10 @@ Công nghệ sử dụng:
 • OpenCV - Xử lý hình ảnh camera
 • Python & Tkinter - Giao diện người dùng
 
-Phát triển bởi: Your Team
-© 2024 All rights reserved"""
+Phát triển bởi: 2 Huy
+"""
         
-        messagebox.showinfo("Thông tin PostureGuard Pro", about_text)
+        messagebox.showinfo("Thông tin Hệ thống giám sát ", about_text)
     
     def open_settings(self):
         """Mở cài đặt tổng quát"""
@@ -909,7 +938,7 @@ Phát triển bởi: Your Team
         settings_window.grab_set()
         
         # Title
-        title_label = tk.Label(settings_window, text="Cài đặt PostureGuard Pro", 
+        title_label = tk.Label(settings_window, text="Cài đặt Hệ thống giám sát ", 
                               font=('Segoe UI', 14, 'bold'), 
                               fg='#1f2937', bg='#f8fafc')
         title_label.pack(pady=(20, 15))
