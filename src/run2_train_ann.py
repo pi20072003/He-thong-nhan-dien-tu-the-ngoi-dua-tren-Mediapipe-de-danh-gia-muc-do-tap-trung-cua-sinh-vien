@@ -17,7 +17,6 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
-# ----- Đường dẫn -----
 DATA_FILE = os.path.join("data", "pose_dataset.csv")
 MODEL_DIR = "models"
 os.makedirs(MODEL_DIR, exist_ok=True)
@@ -25,7 +24,6 @@ MODEL_PATH = os.path.join(MODEL_DIR, "posture_ann.h5")
 SCALER_PATH = os.path.join(MODEL_DIR, "scaler.pkl")
 LABELS_PATH = os.path.join(MODEL_DIR, "labels.json")
 
-# ----- Label mapping phải khớp với file capture -----
 LABELS = {
     0: "ngoi thang",
     1: "guc dau",

@@ -2,8 +2,8 @@
 Pose Capture (TF 2.15.0 + MediaPipe 0.10.21 + protobuf 4.25.3)
 
 Phím tắt:
-  0-2 : đổi nhãn hiện tại
-  s   : lưu 1 mẫu (1 frame) vào CSV
+  0-5 : đổi nhãn hiện tại
+  s   : lưu 1 mẫu vào CSV
   ESC : thoát
 
 LABELS :

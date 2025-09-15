@@ -27,7 +27,6 @@ with open(SCALER_PATH, "rb") as f:
 with open(LABELS_PATH, "r", encoding="utf-8") as f:
     LABELS = {int(k): v for k, v in json.load(f).items()}
 
-# Mediapipe
 mp_pose = mp.solutions.pose
 mp_draw = mp.solutions.drawing_utils
 
@@ -59,16 +58,13 @@ def main():
             res = pose.process(rgb)
 
             if res.pose_landmarks:
-                # Vẽ skeleton
                 mp_draw.draw_landmarks(frame, res.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
-                # Rút đặc trưng: 33 * (x,y,z,visibility) = 132
                 feats = []
                 for lm in res.pose_landmarks.landmark:
                     feats += [lm.x, lm.y, lm.z, lm.visibility]
                 feats = np.array(feats, dtype=np.float32)
 
-                # Dự đoán
                 label_text, prob = predict_label(feats)
                 cv2.putText(frame, f"{label_text} ({prob:.2f})", (10, 30),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
