@@ -460,7 +460,7 @@ class PostureMonitoringGUI:
     def camera_loop(self):
         if not self.mp_pose:
             return
-        
+
         with self.mp_pose.Pose(
             static_image_mode=False,
             model_complexity=1,
@@ -472,11 +472,33 @@ class PostureMonitoringGUI:
                 ret, frame = self.cap.read()
                 if not ret:
                     break
-                
+
                 frame = cv2.flip(frame, 1)
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results = pose.process(rgb_frame)
-                
+
+                '''
+                if results.pose_landmarks:
+                    # Lấy các tọa độ landmark
+                    h, w, _ = frame.shape
+                    x_coords = [lm.x * w for lm in results.pose_landmarks.landmark]
+                    y_coords = [lm.y * h for lm in results.pose_landmarks.landmark]
+
+                    # Lấy bounding box quanh cơ thể
+                    x_min, x_max = int(min(x_coords)), int(max(x_coords))
+                    y_min, y_max = int(min(y_coords)), int(max(y_coords))
+
+                    # Thêm padding cho đẹp
+                    padding = 50
+                    x_min = max(0, x_min - padding)
+                    y_min = max(0, y_min - padding)
+                    x_max = min(w, x_max + padding)
+                    y_max = min(h, y_max + padding)
+
+                    # Cắt khung hình chỉ còn người
+                    frame = frame[y_min:y_max, x_min:x_max]
+                '''
+
                 if results.pose_landmarks:
                     self.mp_draw.draw_landmarks(
                         frame, results.pose_landmarks, self.mp_pose.POSE_CONNECTIONS)
