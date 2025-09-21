@@ -12,7 +12,7 @@ import threading
 import time
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta    
 import pickle
 from collections import deque
 
@@ -54,7 +54,7 @@ class PostureMonitoringGUI:
         self.alerts_count = 0
         
         self.last_alert_time = None
-        self.alert_cooldown_seconds = 1  # Chỉ cảnh báo 1 lần mỗi 5 giây
+        self.alert_cooldown_seconds = 1  # Chỉ cảnh báo 1 lần mỗi giây
         
         self.posture_buffer = deque(maxlen=10) # Buffer để làm mượt dự đoán
         # Lưu trữ dữ liệu
@@ -509,13 +509,19 @@ class PostureMonitoringGUI:
 
             self.is_monitoring = True
             self.session_start_time = time.time()
+
+            self.history = []  # reset lịch sử tư thế
+            self.posture_buffer.clear()
             self.session_time = 0
             self.good_posture_time = 0
             self.alerts_count = 0
             self.last_alert_time = None # Reset thời gian cảnh báo
-            self.history = [] # Reset lịch sử tư thế
-            self.posture_buffer.clear() # Xóa buffer khi bắt đầu phiên mới
-            
+
+            if self.current_posture is not None:
+                self.history.append((0, self.current_posture))
+            else:
+                self.history.append((0, "unknown"))
+                
             # Update UI
             self.start_btn.config(text="Dừng giám sát", bg='#ef4444')
             self.status_indicator.config(fg='#10b981')
@@ -844,22 +850,50 @@ class PostureMonitoringGUI:
             )
             if file_path:
                 with open(file_path, 'w', encoding='utf-8') as f:
+                    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     f.write("Báo cáo tư thế\n")
+                    f.write(f"(Xuất lúc: {now_str})\n")
                     f.write("-" * 40 + "\n")
                     f.write(f"Thời gian giám sát: {self.session_time // 3600:02d}:{(self.session_time % 3600) // 60:02d}:{self.session_time % 60:02d}\n")
                     f.write(f"Số cảnh báo: {self.alerts_count}\n")
-                    f.write(f"Tư thế cuối cùng phát hiện: {self.current_posture}\n")
-                    focus_score = self.focus_scores.get(self.current_posture, 0)
-                    f.write(f"Mức độ tập trung trung bình: {focus_score:.2f}%\n")
+                    last_posture = getattr(self, "current_posture", "Chưa giám sát")
+                    f.write(f"Tư thế cuối cùng phát hiện: {last_posture}\n")
+
+                    # Tính trung bình mức độ tập trung dựa trên toàn bộ lịch sử
+                    focus_score_avg = 0
+                    if self.history:
+                        total_time = self.session_time
+                        weighted_sum = 0
+                        last_time = 0
+                        
+                        # Lặp qua lịch sử để tính điểm cho từng khoảng thời gian
+                        for i in range(len(self.history) - 1):
+                            current_ts, current_posture = self.history[i]
+                            next_ts, _ = self.history[i+1]
+                            duration = next_ts - current_ts
+                            score = self.focus_scores.get(current_posture, 0)
+                            weighted_sum += score * duration
+                        
+                        # Tính cho tư thế cuối cùng đến hết phiên
+                        last_ts, last_posture = self.history[-1]
+                        duration = total_time - last_ts
+                        score = self.focus_scores.get(last_posture, 0)
+                        weighted_sum += score * duration
+
+                        focus_score_avg = weighted_sum / total_time if total_time > 0 else 0
+                    else:
+                        focus_score_avg = self.focus_scores.get(self.current_posture, 0)
+                    f.write(f"Mức độ tập trung trung bình: {focus_score_avg:.2f}%\n")
                     
                     f.write("\nLỊCH SỬ THAY ĐỔI TƯ THẾ:\n")
                     f.write("-" * 40 + "\n")
-                    if not self.history:
+                    if not getattr(self, "history", []):
                         f.write("Không có dữ liệu lịch sử để hiển thị.\n")
-                    
-                    for ts, posture in self.history:
-                        minutes, seconds = divmod(ts, 60)
-                        f.write(f"Thời gian {minutes:02d}:{seconds:02d} - Tư thế: {posture}\n")
+                    else:
+                        for ts, posture in self.history:
+                            h, remainder = divmod(ts, 3600)
+                            m, s = divmod(remainder, 60)
+                            f.write(f"Thời gian {h:02d}:{m:02d}:{s:02d} - Tư thế: {posture}\n")
 
                 messagebox.showinfo("Xuất báo cáo", f"Báo cáo đã được lưu: {file_path}")
         except Exception as e:
@@ -921,6 +955,14 @@ class PostureMonitoringGUI:
    - Ngả người: Cần điều chỉnh
    - Quay trái/phải: Cần điều chỉnh
    - Chống tay: Cần điều chỉnh
+
+4. Cách tính điểm tập trung:
+   - Ngồi thẳng: 100 %      - Cúi đầu: 40 %
+   - Ngả người: 60 %        - Quay trái/phải: 70 %   
+   - Chống tay: 80 % 
+   - Thời gian tư thế cần tính 
+        = tgian bắt đầu thay đổi tư thế sau - tian bắt đầu thay đổi tư thế cần tính
+   
 
 Lưu ý: Ngồi cách camera 60-100cm để đạt độ chính xác tốt nhất."""
         
