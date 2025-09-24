@@ -1,7 +1,4 @@
-"""
-Giao diện giám sát tư thế thông minh
-
-"""
+#Giao diện giám sát tư thế thông minh
 
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -142,18 +139,6 @@ class PostureMonitoringGUI:
                                  font=('Segoe UI', 10), 
                                  fg='#6b7280', bg='#f8fafc')
         subtitle_label.pack(side='left', padx=(15, 0))
-        
-        # Status indicator phía bên phải header
-        self.status_frame = tk.Frame(header_frame, bg='#f8fafc')
-        self.status_frame.pack(side='right')
-        self.status_indicator = tk.Label(self.status_frame, text="●", 
-                                        font=('Segoe UI', 14), 
-                                        fg='#ef4444', bg='#f8fafc')
-        self.status_indicator.pack(side='left')
-        self.status_text = tk.Label(self.status_frame, text="Dừng", 
-                                   font=('Segoe UI', 10, 'bold'), 
-                                   fg='#374151', bg='#f8fafc')
-        self.status_text.pack(side='left', padx=(5, 0))
     
     def create_main_content(self, parent):
         """Tạo nội dung chính với camera CỐ ĐỊNH và bố cục mới"""
@@ -189,20 +174,12 @@ class PostureMonitoringGUI:
         alert_frame.pack(fill='x', pady=(0, 8))
         self.alerts_count_label = alert_frame.children['!label']
         
-        # Cột phải phụ (thống kê nhanh, lịch sử, cài đặt)
-        right_side_column = tk.Frame(content_frame, bg='#f8fafc')
-        right_side_column.pack(side='left', fill='y', padx=(0, 15))
-        
-        # Ô thống kê nhanh
-        self.setup_quick_stats(right_side_column)
-        # Ô lịch sử gần đây
-        self.setup_recent_history(right_side_column)
         # Ô cài đặt
-        self.setup_settings_panel(right_side_column)
+        self.setup_settings_panel(right_column)
     
     def setup_camera_section(self, parent):
         """Camera section với vùng CỐ ĐỊNH TUYỆT ĐỐI"""
-        # Camera frame
+         # Camera frame
         camera_frame = self.create_card(parent, "Giám sát trực tiếp")
         camera_frame.pack(fill='x', pady=(0, 15))
         
@@ -215,15 +192,35 @@ class PostureMonitoringGUI:
                                   bg='#3b82f6', fg='white', 
                                   font=('Segoe UI', 10, 'bold'),
                                   padx=20, pady=8, relief='flat')
-        self.start_btn.pack(side='left')
-        
-        settings_btn = tk.Button(control_frame, text="Cài đặt", 
-                               command=self.open_settings,
-                               bg='#6b7280', fg='white', 
-                               font=('Segoe UI', 9),
-                               padx=15, pady=8, relief='flat')
-        settings_btn.pack(side='right')
-        
+
+        self.start_btn.pack(side='left', padx=(0, 10))
+
+        help_btn = tk.Button(control_frame, text="Hướng dẫn sử dụng", 
+                            command=self.show_help,
+                            bg='#6366f1', fg='white', 
+                            font=('Segoe UI', 10, 'bold'),
+                            padx=20, pady=8, relief='flat')
+        help_btn.pack(side='left', padx=(0, 10))
+
+        about_btn = tk.Button(control_frame, text="Thông tin phần mềm", 
+                            command=self.show_about,
+                            bg='#6b7280', fg='white', 
+                            font=('Segoe UI', 10, 'bold'),
+                            padx=20, pady=8, relief='flat')
+        about_btn.pack(side='left')
+
+        # Hiển thị trạng thái 
+        self.status_frame = tk.Frame(control_frame, bg='white')
+        self.status_frame.pack(side='right', padx=(15,0))
+        self.status_indicator = tk.Label(self.status_frame, text="●", 
+                                    font=('Segoe UI', 14), 
+                                    fg='#ef4444', bg='white')
+        self.status_indicator.pack(side='left')
+        self.status_text = tk.Label(self.status_frame, text="Dừng", 
+                            font=('Segoe UI', 10, 'bold'), 
+                            fg='#374151', bg='white')
+        self.status_text.pack(side='left', padx=(5, 0))
+
         # Camera container - CỐ ĐỊNH TUYỆT ĐỐI
         camera_container_outer = tk.Frame(camera_frame, bg='white')
         camera_container_outer.pack(fill='x', padx=15, pady=(0, 15))
@@ -280,7 +277,7 @@ class PostureMonitoringGUI:
                                         font=('Segoe UI', 11, 'bold'),
                                         fg='#374151', bg='#f3f4f6')
         self.confidence_label.pack(pady=(0, 12))
-    
+
     def setup_session_stats(self, parent):
         """Thống kê phiên làm việc"""
         stats_frame = self.create_card(parent, "Thống kê phiên làm việc")
@@ -340,7 +337,6 @@ class PostureMonitoringGUI:
         alerts_frame = self.create_card(parent, "Cảnh báo")
         alerts_frame.pack(fill='x', pady=(0, 12))
         
-        
         self.alerts_container = tk.Frame(alerts_frame, bg='white', width=220, height=200)
         self.alerts_container.pack(fill='x', padx=15, pady=(0, 15))
         self.alerts_container.pack_propagate(False)
@@ -351,85 +347,28 @@ class PostureMonitoringGUI:
                                        font=('Segoe UI', 9),
                                        fg='#6b7280', bg='white')
         self.no_alerts_label.pack(pady=15)
-    
-    def setup_quick_stats(self, parent):
-        """Thống kê nhanh"""
-        stats_frame = self.create_card(parent, "Thống kê nhanh")
-        stats_frame.pack(fill='x', pady=(0, 12))
-        
-        stats_container = tk.Frame(stats_frame, bg='white')
-        stats_container.pack(fill='x', padx=15, pady=(0, 15))
-
-#?????????????????????????????????????????????? 
-        stats_data = [
-            ("Thời gian tốt nhất", "2h 45m"),
-            ("Cải thiện tuần này", "+12%"),
-            ("Mục tiêu hôm nay", "6/8 giờ")
-        ]
-#??????????????????????????????????????????????
-        
-        for label, value in stats_data:
-            row = tk.Frame(stats_container, bg='white')
-            row.pack(fill='x', pady=3)
-            
-            tk.Label(row, text=label, font=('Segoe UI', 9),
-                    fg='#6b7280', bg='white').pack(side='left')
-            
-            color = '#10b981' if '+' in value else '#374151'
-            tk.Label(row, text=value, font=('Segoe UI', 9, 'bold'),
-                    fg=color, bg='white').pack(side='right')
-    
-    def setup_recent_history(self, parent):
-        """Lịch sử gần đây"""
-        history_frame = self.create_card(parent, "Lịch sử gần đây")
-        history_frame.pack(fill='x', pady=(0, 12))
-        
-        history_container = tk.Frame(history_frame, bg='white')
-        history_container.pack(fill='x', padx=15, pady=(0, 15))
-        
-#??????????????????????????????????????????????
-        # Sample data
-        history_data = [
-            ("09:00", "sit_straight", "15m"),
-            ("09:15", "lean_forward", "8m"),
-            ("09:23", "sit_straight", "12m"),
-            ("09:35", "head_forward", "5m")
-        ]
-#??????????????????????????????????????????????
-
-        for time_str, posture, duration in history_data:
-            row = tk.Frame(history_container, bg='white')
-            row.pack(fill='x', pady=2)
-            
-            # Status icon
-            icon = "✅" if posture == "sit_straight" else "❌"
-            tk.Label(row, text=icon, font=('Segoe UI', 9),
-                    bg='white').pack(side='left')
-            
-            # Time
-            tk.Label(row, text=time_str, font=('Segoe UI', 8),
-                    fg='#6b7280', bg='white').pack(side='left', padx=(8, 0))
-            
-            # Duration
-            tk.Label(row, text=duration, font=('Segoe UI', 8, 'bold'),
-                    fg='#374151', bg='white').pack(side='right')
-    
+ 
     def setup_settings_panel(self, parent):
         """Panel cài đặt"""
         settings_frame = self.create_card(parent, "Cài đặt & Điều khiển")
         settings_frame.pack(fill='x')
         
         settings_container = tk.Frame(settings_frame, bg='white')
-        settings_container.pack(fill='x', padx=15, pady=(0, 15))
+        settings_container.pack(fill='x', padx=15, pady=(0, 8))
+        
+        # Độ nhạy cảnh báo
+        self.sensitivity_var = tk.StringVar(value="Trung bình (≥70%)")
+        tk.Label(settings_container, text="Độ nhạy cảnh báo:", 
+                font=('Segoe UI', 10), fg='#374151', bg='white').pack(anchor='w', pady=(2, 2))
+        self.sensitivity_combo = ttk.Combobox( settings_container, textvariable=self.sensitivity_var,
+                                            values=["Thấp (≥50%)", "Trung bình (≥70%)", "Cao (≥90%)"],
+                                            state="readonly")
+        self.sensitivity_combo.pack(fill='x', pady=(0, 10))
         
         # Buttons
         buttons = [
-            ("Chế độ toàn màn hình", self.toggle_fullscreen, '#6366f1'),
             ("Xuất báo cáo", self.export_report, '#059669'),
-            ("Cài đặt Camera", self.camera_settings, '#7c3aed'),
-            ("Hướng dẫn sử dụng", self.show_help, '#0891b2'),
-            ("Thông tin phần mềm", self.show_about, '#6b7280')
-        ]
+            ("Cài đặt Camera", self.camera_settings, '#7c3aed')]
         
         for text, command, color in buttons:
             btn = tk.Button(settings_container, text=text, command=command,
@@ -447,7 +386,6 @@ class PostureMonitoringGUI:
         
         tk.Label(header, text=title, font=('Segoe UI', 10, 'bold'),
                 fg='#1f2937', bg='white').pack(side='left')
-        
         return card
     
     def create_stat_box(self, parent, value, label, color, bg_color):
@@ -462,7 +400,6 @@ class PostureMonitoringGUI:
         # Label
         tk.Label(box, text=label, font=('Segoe UI', 8),
                 fg='#6b7280', bg=bg_color).pack(pady=(0, 10))
-        
         return box
     
     def load_model(self):
@@ -516,11 +453,16 @@ class PostureMonitoringGUI:
             self.good_posture_time = 0
             self.alerts_count = 0
             self.last_alert_time = None # Reset thời gian cảnh báo
+            self.session_start_datetime = datetime.now()  # lưu thời gian bắt đầu
+
+            if not self.sensitivity_var.get():
+                self.sensitivity_var.set("Trung bình (≥70%)")
+            self.sensitivity_combo.config(state="disabled") # Khóa combobox độ nhạy khi bắt đầu giám sát
 
             if self.current_posture is not None:
-                self.history.append((0, self.current_posture))
+                self.history.append((0, self.current_posture))  
             else:
-                self.history.append((0, "unknown"))
+                self.history.append((0, "unknown")) # Nếu chưa có tư thế nào gán unknown
                 
             # Update UI
             self.start_btn.config(text="Dừng giám sát", bg='#ef4444')
@@ -541,6 +483,8 @@ class PostureMonitoringGUI:
         if self.cap:
             self.cap.release()
         
+        self.sensitivity_combo.config(state="readonly") #Mở lại combobox để chọn lại độ nhạy
+
         # Update UI
         self.start_btn.config(text="Bắt đầu giám sát", bg='#3b82f6')
         self.status_indicator.config(fg='#ef4444')
@@ -548,6 +492,7 @@ class PostureMonitoringGUI:
         self.camera_label.config(image="", text="Camera dừng\nBấm 'Bắt đầu giám sát' để khởi động")
         self.posture_label.config(text="Chưa xác định")
         self.confidence_label.config(text="0.0%")
+        self.session_end_datetime = datetime.now()  # lưu thời gian kết thúc
     
     def camera_loop(self):
         """Vòng lặp xử lý camera"""
@@ -580,6 +525,7 @@ class PostureMonitoringGUI:
                     features = self.extract_features(results.pose_landmarks)
                     if features is not None:
                         posture, confidence = self.predict_posture(features)
+                        self.current_posture = posture
                         self.confidence = confidence # Vẫn hiển thị confidence của frame hiện tại
                         
                         # --- Cải tiến logic làm mượt dự đoán ---
@@ -597,9 +543,18 @@ class PostureMonitoringGUI:
 
                                 # Chỉ cập nhật nếu tư thế ổn định đã thay đổi và đạt ngưỡng
                                 if count > STABILITY_THRESHOLD and stable_posture != self.current_posture:
-                                    session_time = int(time.time() - self.session_start_time)
-                                    self.history.append((session_time, stable_posture))
-                                    self.current_posture = stable_posture
+                                    sensitivity_text = self.sensitivity_var.get() if hasattr(self, "sensitivity_var") else "Trung bình"
+                                    if "50" in sensitivity_text:
+                                        threshold = 0.50
+                                    elif "90" in sensitivity_text:
+                                        threshold = 0.90
+                                    else:
+                                        threshold = 0.70
+                                    if self.confidence >= threshold:  # ✅ chỉ ghi nếu độ tin cậy >= ngưỡng
+                                        session_time = int(time.time() - self.session_start_time)
+                                        self.history.append((session_time, stable_posture))
+                                        self.current_posture = stable_posture
+
                             except ValueError:
                                 pass # Bỏ qua nếu buffer rỗng
 
@@ -633,29 +588,23 @@ class PostureMonitoringGUI:
                 right = left + display_width
                 bottom = top + display_height
                 frame_pil = frame_pil.crop((left, top, right, bottom))
-                
                 frame_tk = ImageTk.PhotoImage(frame_pil)
-                
                 self.root.after(0, lambda img=frame_tk: self.update_camera_display(img))
-                
                 time.sleep(0.03)  # ~30 FPS
     
     def extract_features(self, pose_landmarks):
         """Trích xuất đặc trưng từ pose landmarks"""
         if not pose_landmarks:
             return None
-        
         features = []
         for landmark in pose_landmarks.landmark:
             features.extend([landmark.x, landmark.y, landmark.z, landmark.visibility])
-        
         return np.array(features, dtype=np.float32)
     
     def predict_posture(self, features):
         """Dự đoán tư thế sử dụng model đã huấn luyện"""
         if self.model is None or self.scaler is None:
             return "unknown", 0.0
-        
         try:
             X = self.scaler.transform(features.reshape(1, -1))
             probs = self.model.predict(X, verbose=0)[0]
@@ -691,7 +640,6 @@ class PostureMonitoringGUI:
             "chong tay": "Chống tay",
             "unknown": "Chưa xác định"
         }
-        
         display_name = posture_names.get(self.current_posture, self.current_posture)
         self.posture_label.config(text=display_name)
         
@@ -708,6 +656,18 @@ class PostureMonitoringGUI:
     def check_alerts(self, posture):
         """Kiểm tra và tạo cảnh báo"""
         current_time = datetime.now()
+        
+        sensitivity_text = self.sensitivity_var.get()
+        if "50" in sensitivity_text:
+            threshold = 0.50
+        elif "90" in sensitivity_text:
+            threshold = 0.90
+        else:
+            threshold = 0.70  # mặc định Trung bình
+
+        if self.confidence < threshold: #độ tin cậy không đạt ngưỡng thì bỏ qua cảnh báo
+            return
+    
         # Chỉ cảnh báo nếu đã qua thời gian cooldown
         if self.last_alert_time and \
            (current_time - self.last_alert_time).total_seconds() < self.alert_cooldown_seconds:
@@ -729,7 +689,7 @@ class PostureMonitoringGUI:
 
         # Thêm vào danh sách cảnh báo gần đây
         self.recent_alerts.appendleft((current_time, alert_message))
-        if posture != "ngoi thang":
+        if posture != "ngoi thang" and self.confidence >= threshold:
             self.alerts_count += 1  # Chỉ tăng số cảnh báo với tư thế xấu
 
         # Cập nhật hiển thị cảnh báo
@@ -805,7 +765,6 @@ class PostureMonitoringGUI:
             
             # Lên lịch cập nhật tiếp theo
             self.root.after(1000, update_timer)
-        
         update_timer()
     
     def update_session_stats(self):
@@ -853,7 +812,12 @@ class PostureMonitoringGUI:
                     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     f.write("Báo cáo tư thế\n")
                     f.write(f"(Xuất lúc: {now_str})\n")
+                    if hasattr(self, "session_start_datetime"):
+                        f.write(f"Thời gian bắt đầu giám sát: {self.session_start_datetime.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    if hasattr(self, "session_end_datetime"):
+                        f.write(f"Thời gian kết thúc giám sát: {self.session_end_datetime.strftime('%Y-%m-%d %H:%M:%S')}\n")
                     f.write("-" * 40 + "\n")
+                    f.write(f"Độ nhạy sử dụng: {self.sensitivity_var.get()}\n")
                     f.write(f"Thời gian giám sát: {self.session_time // 3600:02d}:{(self.session_time % 3600) // 60:02d}:{self.session_time % 60:02d}\n")
                     f.write(f"Số cảnh báo: {self.alerts_count}\n")
                     last_posture = getattr(self, "current_posture", "Chưa giám sát")
@@ -884,7 +848,6 @@ class PostureMonitoringGUI:
                     else:
                         focus_score_avg = self.focus_scores.get(self.current_posture, 0)
                     f.write(f"Mức độ tập trung trung bình: {focus_score_avg:.2f}%\n")
-                    
                     f.write("\nLỊCH SỬ THAY ĐỔI TƯ THẾ:\n")
                     f.write("-" * 40 + "\n")
                     if not getattr(self, "history", []):
@@ -912,7 +875,6 @@ class PostureMonitoringGUI:
         # Camera ID setting
         tk.Label(settings_window, text="ID Camera:", font=('Segoe UI', 10, 'bold'),
                 fg='#374151', bg='#f8fafc').pack(pady=(20, 5))
-        
         camera_id_var = tk.StringVar(value="0")
         camera_spinbox = tk.Spinbox(settings_window, from_=0, to=9, width=10, 
                                    textvariable=camera_id_var)
@@ -938,32 +900,26 @@ class PostureMonitoringGUI:
     def show_help(self):
         """Hiển thị hướng dẫn"""
         help_text = """Hướng dẫn sử dụng:
-
 1. Bắt đầu giám sát:
    - Bấm nút "Bắt đầu giám sát"
    - Ngồi thẳng và điều chỉnh góc cam hợp lý
    - Hệ thống sẽ tự động phân tích tư thế
-
 2. Theo dõi thống kê:
    - Xem thời gian làm việc
    - Theo dõi % tư thế tốt
    - Nhận cảnh báo khi cần
-
 3. Tư thế được nhận diện:
    - Ngồi thẳng: Tư thế tốt
    - Cúi đầu: Cần điều chỉnh
    - Ngả người: Cần điều chỉnh
    - Quay trái/phải: Cần điều chỉnh
    - Chống tay: Cần điều chỉnh
-
 4. Cách tính điểm tập trung:
    - Ngồi thẳng: 100 %      - Cúi đầu: 40 %
    - Ngả người: 60 %        - Quay trái/phải: 70 %   
    - Chống tay: 80 % 
    - Thời gian tư thế cần tính 
-        = tgian bắt đầu thay đổi tư thế sau - tian bắt đầu thay đổi tư thế cần tính
-   
-
+        = tgian bắt đầu tư thế sau - tgian bắt đầu tư thế cần tính
 Lưu ý: Ngồi cách camera 60-100cm để đạt độ chính xác tốt nhất."""
         
         help_window = tk.Toplevel(self.root)
@@ -990,21 +946,17 @@ Lưu ý: Ngồi cách camera 60-100cm để đạt độ chính xác tốt nhấ
     
     def show_about(self):
         """Hiển thị thông tin ứng dụng"""
-        about_text = """Hệ thống giám sát  v1.0
-
+        about_text = """Hệ thống giám sát
 Hệ thống giám sát tư thế thông minh sử dụng AI
-để phân tích và cảnh báo tư thế ngồi không đúng.
-
+để phân tích và cảnh báo tư thế ngồi sai.
 Công nghệ sử dụng:
 • MediaPipe - Nhận diện khung xương người
 • TensorFlow - Mô hình AI phân loại tư thế  
 • OpenCV - Xử lý hình ảnh camera
 • Python & Tkinter - Giao diện người dùng
-
 Phát triển bởi: Đỗ Quang Huy - pi2007
-                Lê Quang Huy - playmaker
+                          Lê Quang Huy - playmaker
 """
-        
         messagebox.showinfo("Thông tin Hệ thống giám sát ", about_text)
     
     def open_settings(self):
