@@ -900,27 +900,24 @@ class PostureMonitoringGUI:
     def show_help(self):
         """Hiển thị hướng dẫn"""
         help_text = """Hướng dẫn sử dụng:
-1. Bắt đầu giám sát:
-   - Bấm nút "Bắt đầu giám sát"
-   - Ngồi thẳng và điều chỉnh góc cam hợp lý
-   - Hệ thống sẽ tự động phân tích tư thế
-2. Theo dõi thống kê:
+1. Theo dõi thống kê:
    - Xem thời gian làm việc
    - Theo dõi % tư thế tốt
    - Nhận cảnh báo khi cần
-3. Tư thế được nhận diện:
+2. Tư thế được nhận diện:
    - Ngồi thẳng: Tư thế tốt
    - Cúi đầu: Cần điều chỉnh
    - Ngả người: Cần điều chỉnh
    - Quay trái/phải: Cần điều chỉnh
    - Chống tay: Cần điều chỉnh
-4. Cách tính điểm tập trung:
+3. Cách tính điểm tập trung:
    - Ngồi thẳng: 100 %      - Cúi đầu: 40 %
    - Ngả người: 60 %        - Quay trái/phải: 70 %   
    - Chống tay: 80 % 
    - Thời gian tư thế cần tính 
         = tgian bắt đầu tư thế sau - tgian bắt đầu tư thế cần tính
-Lưu ý: Ngồi cách camera 60-100cm để đạt độ chính xác tốt nhất."""
+Lưu ý: Ngồi cách camera 60-100cm để đạt độ chính xác tốt nhất.
+        Phải chọn độ nhạy trước khi bắt đầu giám sát."""
         
         help_window = tk.Toplevel(self.root)
         help_window.title("Hướng dẫn sử dụng")
