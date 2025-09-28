@@ -447,6 +447,7 @@ class PostureMonitoringGUI:
             self.is_monitoring = True
             self.session_start_time = time.time()
 
+            # Reset tất cả biến trạng thái
             self.history = []  # reset lịch sử tư thế
             self.posture_buffer.clear()
             self.session_time = 0
@@ -455,24 +456,24 @@ class PostureMonitoringGUI:
             self.last_alert_time = None # Reset thời gian cảnh báo
             self.session_start_datetime = datetime.now()  # lưu thời gian bắt đầu
 
+            # Đảm bảo sensitivity có giá trị mặc định
             if not self.sensitivity_var.get():
                 self.sensitivity_var.set("Trung bình (≥70%)")
             self.sensitivity_combo.config(state="disabled") # Khóa combobox độ nhạy khi bắt đầu giám sát
 
-            if self.current_posture is not None:
-                self.history.append((0, self.current_posture))  
-            else:
-                self.history.append((0, "unknown")) # Nếu chưa có tư thế nào gán unknown
-                
+            # THÊM PHẦN TỬ ĐẦU TIÊN VÀO LỊCH SỬ - CHỈ MỘT LẦN
+            initial_posture = self.current_posture if self.current_posture else "unknown"
+            self.history.append((0, initial_posture))  # timestamp = 0, posture = initial_posture
+            
             # Update UI
             self.start_btn.config(text="Dừng giám sát", bg='#ef4444')
             self.status_indicator.config(fg='#10b981')
             self.status_text.config(text="Đang hoạt động")
-            
+        
             # Start camera thread
             self.camera_thread = threading.Thread(target=self.camera_loop, daemon=True)
             self.camera_thread.start()
-            
+        
         except Exception as e:
             messagebox.showerror("Lỗi", f"Không thể bắt đầu giám sát: {e}")
     
@@ -498,7 +499,7 @@ class PostureMonitoringGUI:
         """Vòng lặp xử lý camera"""
         if not self.mp_pose:
             return
-        
+
         with self.mp_pose.Pose(
             static_image_mode=False,
             model_complexity=1,
@@ -506,92 +507,156 @@ class PostureMonitoringGUI:
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5,
         ) as pose:
-            
+
             while self.is_monitoring and self.cap and self.cap.isOpened():
                 ret, frame = self.cap.read()
                 if not ret:
                     break
-                
+
                 frame = cv2.flip(frame, 1)
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 results = pose.process(rgb_frame)
-                
+
                 # Draw pose landmarks
                 if results.pose_landmarks:
-                    self.mp_draw.draw_landmarks(
-                        frame, results.pose_landmarks, self.mp_pose.POSE_CONNECTIONS)
-                    
+                    self.mp_draw.draw_landmarks(frame, results.pose_landmarks, self.mp_pose.POSE_CONNECTIONS)
+
                     # Predict posture
                     features = self.extract_features(results.pose_landmarks)
                     if features is not None:
                         posture, confidence = self.predict_posture(features)
                         self.current_posture = posture
-                        self.confidence = confidence # Vẫn hiển thị confidence của frame hiện tại
-                        
+                        self.confidence = confidence
+
                         # --- Cải tiến logic làm mượt dự đoán ---
                         self.posture_buffer.append(posture)
-                        
-                        # Chỉ đưa ra quyết định khi buffer đã đầy để có đủ dữ liệu
-                        if len(self.posture_buffer) == self.posture_buffer.maxlen:
+
+                        # Chỉ đưa ra quyết định khi buffer có đủ dữ liệu
+                        if len(self.posture_buffer) >= 5:
                             try:
                                 # Tìm tư thế ổn định (xuất hiện nhiều nhất)
                                 stable_posture = max(set(self.posture_buffer), key=self.posture_buffer.count)
                                 count = self.posture_buffer.count(stable_posture)
-                                
-                                # Ngưỡng ổn định: tư thế phải chiếm > 60% buffer
-                                STABILITY_THRESHOLD = 6 
 
-                                # Chỉ cập nhật nếu tư thế ổn định đã thay đổi và đạt ngưỡng
-                                if count > STABILITY_THRESHOLD and stable_posture != self.current_posture:
-                                    sensitivity_text = self.sensitivity_var.get() if hasattr(self, "sensitivity_var") else "Trung bình"
-                                    if "50" in sensitivity_text:
-                                        threshold = 0.50
-                                    elif "90" in sensitivity_text:
-                                        threshold = 0.90
+                                # Ngưỡng ổn định: tư thế phải chiếm >= 40% buffer
+                                STABILITY_THRESHOLD = 2  # 2/5 = 40%
+
+                                # LẤY NGƯỠNG TỪ CÀI ĐẶT - DÙNG CHUNG CHO CẢ CẢNH BÁO VÀ LỊCH SỬ
+                                sensitivity_text = self.sensitivity_var.get()
+                                if "50" in sensitivity_text:
+                                    threshold = 0.50
+                                elif "90" in sensitivity_text:
+                                    threshold = 0.90
+                                else:
+                                    threshold = 0.70  # Mặc định Trung bình
+
+                                # QUAN TRỌNG: Chỉ xử lý nếu đạt ngưỡng độ tin cậy
+                                if count >= STABILITY_THRESHOLD and self.confidence >= threshold:
+                                    session_time = int(time.time() - self.session_start_time)
+
+                                    # KIỂM TRA KỸ TRƯỚC KHI THÊM VÀO HISTORY
+                                    should_add_to_history = False
+
+                                    if not self.history:
+                                        # Nếu history rỗng, thêm luôn
+                                        should_add_to_history = True
                                     else:
-                                        threshold = 0.70
-                                    if self.confidence >= threshold:  # ✅ chỉ ghi nếu độ tin cậy >= ngưỡng
-                                        session_time = int(time.time() - self.session_start_time)
-                                        self.history.append((session_time, stable_posture))
-                                        self.current_posture = stable_posture
+                                        # Kiểm tra phần tử cuối cùng có hợp lệ không
+                                        if (isinstance(self.history[-1], (list, tuple)) and len(self.history[-1]) == 2):
 
-                            except ValueError:
-                                pass # Bỏ qua nếu buffer rỗng
+                                            last_timestamp, last_posture = self.history[-1]
+
+                                            # Chỉ thêm nếu tư thế thay đổi VÀ sau ít nhất 2 giây
+                                            time_diff = session_time - last_timestamp
+
+                                            if stable_posture != last_posture and time_diff >= 2:
+                                                should_add_to_history = True
+                                        else:
+                                            # Nếu phần tử cuối không hợp lệ, thêm luôn
+                                            should_add_to_history = True
+
+                                    if should_add_to_history:
+                                        self.history.append((session_time, stable_posture))
+                                        print(f"Đã thêm vào history: {session_time}s - {stable_posture} (Độ tin cậy: {self.confidence:.1%}, Ngưỡng: {threshold:.0%})")
+
+                                    # Cập nhật current_posture
+                                    self.current_posture = stable_posture
+
+                                    # GỌI CẢNH BÁO VỚI TƯ THẾ ỔN ĐỊNH VÀ ĐỘ TIN CẬY ĐẠT NGƯỠNG
+                                    self.check_alerts(stable_posture)
+
+                            except (ValueError, TypeError, IndexError) as e:
+                                print(f"Lỗi xử lý buffer: {e}")
 
                         # Update UI
                         self.root.after(0, self.update_posture_display)
-                        
-                        # Check for alerts
-                        self.check_alerts(self.current_posture) # Cảnh báo dựa trên tư thế ổn định
-                
+
                 # Convert và hiển thị với kích thước CỐ ĐỊNH
-                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                frame_pil = Image.fromarray(frame_rgb)
-                
-                # Sử dụng kích thước cố định của camera container
-                display_width = self.camera_width - 10  # Trừ padding
-                display_height = self.camera_height - 10
-                
-                # Resize và crop để fit
-                original_width, original_height = frame_pil.size
-                scale_w = display_width / original_width
-                scale_h = display_height / original_height
-                scale = max(scale_w, scale_h)
-                
-                new_width = int(original_width * scale)
-                new_height = int(original_height * scale)
-                frame_pil = frame_pil.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                
-                # Crop from center
-                left = (new_width - display_width) // 2
-                top = (new_height - display_height) // 2
-                right = left + display_width
-                bottom = top + display_height
-                frame_pil = frame_pil.crop((left, top, right, bottom))
-                frame_tk = ImageTk.PhotoImage(frame_pil)
-                self.root.after(0, lambda img=frame_tk: self.update_camera_display(img))
+                try:
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    frame_pil = Image.fromarray(frame_rgb)
+
+                    # Sử dụng kích thước cố định của camera container
+                    display_width = self.camera_width - 10  # Trừ padding
+                    display_height = self.camera_height - 10
+
+                    # Resize và crop để fit
+                    original_width, original_height = frame_pil.size
+                    scale_w = display_width / original_width
+                    scale_h = display_height / original_height
+                    scale = max(scale_w, scale_h)
+
+                    new_width = int(original_width * scale)
+                    new_height = int(original_height * scale)
+                    frame_pil = frame_pil.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+                    # Crop from center
+                    left = (new_width - display_width) // 2
+                    top = (new_height - display_height) // 2
+                    right = left + display_width
+                    bottom = top + display_height
+                    frame_pil = frame_pil.crop((left, top, right, bottom))
+                    frame_tk = ImageTk.PhotoImage(frame_pil)
+                    self.root.after(0, lambda img=frame_tk: self.update_camera_display(img))
+                except Exception as e:
+                    print(f"Lỗi xử lý hình ảnh: {e}")
+
                 time.sleep(0.03)  # ~30 FPS
+
+    def cleanup_history(self):
+        """Dọn dẹp và sửa lỗi history nếu có"""
+        cleaned_history = []
+        for item in self.history:
+            if (isinstance(item, (list, tuple)) and 
+                len(item) == 2 and 
+                isinstance(item[0], (int, float)) and 
+                isinstance(item[1], str)):
+                cleaned_history.append((item[0], item[1]))
+        self.history = cleaned_history
+
+    def remove_duplicate_history(self):
+        """Loại bỏ các mục trùng lặp liên tiếp trong history"""
+        if not self.history:
+            return
     
+        cleaned_history = []
+        last_posture = None
+    
+        for item in self.history:
+            if (isinstance(item, (list, tuple)) and len(item) == 2):
+                timestamp, posture = item
+            
+                # Chỉ thêm nếu tư thế khác với tư thế trước đó
+                if posture != last_posture:
+                    cleaned_history.append((timestamp, posture))
+                    last_posture = posture
+                else:
+                    # Nếu trùng, chỉ cập nhật timestamp của mục cuối cùng
+                    if cleaned_history:
+                        cleaned_history[-1] = (timestamp, posture)
+    
+        self.history = cleaned_history
+
     def extract_features(self, pose_landmarks):
         """Trích xuất đặc trưng từ pose landmarks"""
         if not pose_landmarks:
@@ -656,7 +721,8 @@ class PostureMonitoringGUI:
     def check_alerts(self, posture):
         """Kiểm tra và tạo cảnh báo"""
         current_time = datetime.now()
-        
+
+        # LẤY NGƯỠNG TỪ CÀI ĐẶT - ĐẢM BẢO ĐỒNG BỘ VỚI HISTORY
         sensitivity_text = self.sensitivity_var.get()
         if "50" in sensitivity_text:
             threshold = 0.50
@@ -665,32 +731,35 @@ class PostureMonitoringGUI:
         else:
             threshold = 0.70  # mặc định Trung bình
 
-        if self.confidence < threshold: #độ tin cậy không đạt ngưỡng thì bỏ qua cảnh báo
-            return
-    
+        # QUAN TRỌNG: Đã được kiểm tra trong camera_loop, nhưng kiểm tra lại để chắc chắn
+        if self.confidence < threshold:
+            return  # Bỏ qua nếu không đạt ngưỡng
+
         # Chỉ cảnh báo nếu đã qua thời gian cooldown
-        if self.last_alert_time and \
-           (current_time - self.last_alert_time).total_seconds() < self.alert_cooldown_seconds:
+        if self.last_alert_time and (current_time - self.last_alert_time).total_seconds() < self.alert_cooldown_seconds:
             return  # Bỏ qua nếu chưa đủ thời gian
 
         self.last_alert_time = current_time  # Cập nhật thời gian cảnh báo cuối
 
         # Tên cảnh báo tiếng Việt
         alert_names = {
-            "guc dau": "Tư thế không tốt: Cúi đầu",
-            "nga nguoi": "Tư thế không tốt: Ngả người",
-            "ngoi thang": "Tư thế tốt: Ngồi thẳng",
-            "quay trai": "Tư thế không tốt: Quay trái",
-            "quay phai": "Tư thế không tốt: Quay phải",
-            "chong tay": "Tư thế không tốt: Chống tay"
+                "guc dau": "Tư thế không tốt: Cúi đầu",
+                "nga nguoi": "Tư thế không tốt: Ngả người",
+                "ngoi thang": "Tư thế tốt: Ngồi thẳng",
+                "quay trai": "Tư thế không tốt: Quay trái",
+                "quay phai": "Tư thế không tốt: Quay phải",
+                "chong tay": "Tư thế không tốt: Chống tay"
         }
 
         alert_message = alert_names.get(posture, f"Tư thế: {posture}")
 
         # Thêm vào danh sách cảnh báo gần đây
         self.recent_alerts.appendleft((current_time, alert_message))
-        if posture != "ngoi thang" and self.confidence >= threshold:
-            self.alerts_count += 1  # Chỉ tăng số cảnh báo với tư thế xấu
+    
+        # QUAN TRỌNG: Chỉ tăng số cảnh báo với tư thế xấu
+        if posture != "ngoi thang":
+            self.alerts_count += 1
+            print(f"Đã thêm cảnh báo: {alert_message} (Độ tin cậy: {self.confidence:.1%}, Ngưỡng: {threshold:.0%})")
 
         # Cập nhật hiển thị cảnh báo
         self.root.after(0, self.update_alerts_display)
@@ -802,6 +871,9 @@ class PostureMonitoringGUI:
     def export_report(self):
         """Xuất báo cáo"""
         from tkinter import filedialog
+        self.cleanup_history()
+        self.remove_duplicate_history()
+
         try:
             file_path = filedialog.asksaveasfilename(
                 defaultextension=".txt",
@@ -810,57 +882,111 @@ class PostureMonitoringGUI:
             if file_path:
                 with open(file_path, 'w', encoding='utf-8') as f:
                     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    f.write("Báo cáo tư thế\n")
-                    f.write(f"(Xuất lúc: {now_str})\n")
+                    f.write("BÁO CÁO GIÁM SÁT TƯ THẾ\n")
+                    f.write("-" * 50 + "\n")
+                    f.write(f"Thời gian xuất báo cáo: {now_str}\n")
+            
                     if hasattr(self, "session_start_datetime"):
-                        f.write(f"Thời gian bắt đầu giám sát: {self.session_start_datetime.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                        f.write(f"Thời gian bắt đầu: {self.session_start_datetime.strftime('%Y-%m-%d %H:%M:%S')}\n")
                     if hasattr(self, "session_end_datetime"):
-                        f.write(f"Thời gian kết thúc giám sát: {self.session_end_datetime.strftime('%Y-%m-%d %H:%M:%S')}\n")
-                    f.write("-" * 40 + "\n")
-                    f.write(f"Độ nhạy sử dụng: {self.sensitivity_var.get()}\n")
-                    f.write(f"Thời gian giám sát: {self.session_time // 3600:02d}:{(self.session_time % 3600) // 60:02d}:{self.session_time % 60:02d}\n")
+                        f.write(f"Thời gian kết thúc: {self.session_end_datetime.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            
+                    f.write("-" * 50 + "\n")
+                    f.write(f"Độ nhạy cảnh báo: {self.sensitivity_var.get()}\n")
+                    f.write(f"Thời gian làm việc: {self.session_time // 3600:02d}:{(self.session_time % 3600) // 60:02d}:{self.session_time % 60:02d}\n")
                     f.write(f"Số cảnh báo: {self.alerts_count}\n")
-                    last_posture = getattr(self, "current_posture", "Chưa giám sát")
-                    f.write(f"Tư thế cuối cùng phát hiện: {last_posture}\n")
-
-                    # Tính trung bình mức độ tập trung dựa trên toàn bộ lịch sử
-                    focus_score_avg = 0
+                    f.write(f"Tư thế hiện tại: {self.current_posture}\n")
+                    f.write(f"Độ tin cậy hiện tại: {self.confidence:.1%}\n")
+            
+                    f.write("\n" + "=" * 50 + "\n")
+                
+                    f.write("THỐNG KÊ TƯ THẾ\n")
+                    f.write("-" * 50 + "\n")
+            
+                    # Thống kê số lần xuất hiện của mỗi tư thế
                     if self.history:
-                        total_time = self.session_time
-                        weighted_sum = 0
-                        last_time = 0
-                        
-                        # Lặp qua lịch sử để tính điểm cho từng khoảng thời gian
+                        posture_stats = {}
+                        total_time_in_posture = {}
+                
+                        # Đếm số lần xuất hiện của mỗi tư thế
+                        for timestamp, posture in self.history:
+                            posture_stats[posture] = posture_stats.get(posture, 0) + 1
+                
+                        # Tính thời gian cho mỗi tư thế
                         for i in range(len(self.history) - 1):
                             current_ts, current_posture = self.history[i]
-                            next_ts, _ = self.history[i+1]
+                            next_ts, _ = self.history[i + 1]
                             duration = next_ts - current_ts
-                            score = self.focus_scores.get(current_posture, 0)
-                            weighted_sum += score * duration
+                            total_time_in_posture[current_posture] = total_time_in_posture.get(current_posture, 0) + duration
+                
+                        # Tính thời gian cho tư thế cuối cùng
+                        if self.history:
+                            last_ts, last_posture = self.history[-1]
+                            duration = self.session_time - last_ts
+                            total_time_in_posture[last_posture] = total_time_in_posture.get(last_posture, 0) + duration
+                
+                        total_changes = len(self.history)
+                        total_session_time = self.session_time
+                
+                        f.write("THỐNG KÊ THEO SỐ LẦN:\n")
+                        if posture_stats:
+                            for posture, count in sorted(posture_stats.items(), key=lambda x: x[1], reverse=True):
+                                percentage = (count / total_changes) * 100
+                                f.write(f"  {posture}: {count} lần ({percentage:.1f}%)\n")
+                        else:
+                            f.write("  Không có dữ liệu thống kê số lần\n")
+                
+                        f.write("\nTHỐNG KÊ THEO THỜI GIAN:\n")
+                        if total_time_in_posture:
+                            for posture, time_spent in sorted(total_time_in_posture.items(), key=lambda x: x[1], reverse=True):
+                                percentage = (time_spent / total_session_time) * 100 if total_session_time > 0 else 0
+                                minutes = time_spent // 60
+                                seconds = time_spent % 60
+                                f.write(f"  {posture}: {minutes:02d}:{seconds:02d} ({percentage:.1f}%)\n")
+                        else:
+                            f.write("  Không có dữ liệu thống kê thời gian\n")
+                
+                        # ĐÁNH GIÁ HIỆU SUẤT - SỬ DỤNG CÙNG CÁCH TÍNH VỚI GIAO DIỆN
+                        f.write("\n" + "=" * 50 + "\n")
+                        f.write("ĐÁNH GIÁ HIỆU SUẤT\n")
+                        f.write("-" * 50 + "\n")
+                
+                        # QUAN TRỌNG: Sử dụng cùng cách tính với giao diện
+                        good_posture_percentage_ui = (self.good_posture_time / self.session_time) * 100 if self.session_time > 0 else 0
+                    
+                        f.write(f"Thời gian tư thế tốt: {good_posture_percentage_ui:.1f}%\n")
+                
+                        # Tính điểm tập trung trung bình - SỬ DỤNG CÙNG CÁCH TÍNH
+                        focus_score_total = 0
+                        for posture, time_spent in total_time_in_posture.items():
+                            score = self.focus_scores.get(posture, 0)
+                            focus_score_total += score * time_spent
+                        avg_focus_score = focus_score_total / total_session_time if total_session_time > 0 else 0
+                        f.write(f"Điểm tập trung trung bình: {avg_focus_score:.1f}%\n")
                         
-                        # Tính cho tư thế cuối cùng đến hết phiên
-                        last_ts, last_posture = self.history[-1]
-                        duration = total_time - last_ts
-                        score = self.focus_scores.get(last_posture, 0)
-                        weighted_sum += score * duration
-
-                        focus_score_avg = weighted_sum / total_time if total_time > 0 else 0
                     else:
-                        focus_score_avg = self.focus_scores.get(self.current_posture, 0)
-                    f.write(f"Mức độ tập trung trung bình: {focus_score_avg:.2f}%\n")
-                    f.write("\nLỊCH SỬ THAY ĐỔI TƯ THẾ:\n")
-                    f.write("-" * 40 + "\n")
-                    if not getattr(self, "history", []):
-                        f.write("Không có dữ liệu lịch sử để hiển thị.\n")
-                    else:
-                        for ts, posture in self.history:
-                            h, remainder = divmod(ts, 3600)
-                            m, s = divmod(remainder, 60)
-                            f.write(f"Thời gian {h:02d}:{m:02d}:{s:02d} - Tư thế: {posture}\n")
+                        f.write("Không có dữ liệu lịch sử để thống kê.\n")
+                
+                    f.write("\n" + "=" * 50 + "\n")
 
-                messagebox.showinfo("Xuất báo cáo", f"Báo cáo đã được lưu: {file_path}")
+                    f.write("LỊCH SỬ THAY ĐỔI TƯ THẾ CHI TIẾT\n")
+                    f.write("-" * 50 + "\n")
+                    if not self.history:
+                        f.write("Không có dữ liệu lịch sử.\n")
+                    else:
+                        f.write(f"Tổng số mục trong lịch sử: {len(self.history)}\n\n")
+                        for timestamp, posture in self.history:
+                            hours = timestamp // 3600
+                            minutes = (timestamp % 3600) // 60
+                            seconds = timestamp % 60
+                            f.write(f"[{hours:02d}:{minutes:02d}:{seconds:02d}] {posture}\n")
+                    f.write("\n" + "=" * 50 + "\n")
+
+            messagebox.showinfo("Xuất báo cáo", f"Báo cáo đã được lưu: {file_path}\n")
+        
         except Exception as e:
             messagebox.showerror("Lỗi", f"Không thể xuất báo cáo: {e}")
+            print(f"Chi tiết lỗi export: {e}")
     
     def camera_settings(self):
         """Cài đặt camera"""
@@ -900,24 +1026,27 @@ class PostureMonitoringGUI:
     def show_help(self):
         """Hiển thị hướng dẫn"""
         help_text = """Hướng dẫn sử dụng:
-1. Theo dõi thống kê:
+1. Bắt đầu giám sát:
+   - Bấm nút "Bắt đầu giám sát"
+   - Ngồi thẳng và điều chỉnh góc cam hợp lý
+   - Hệ thống sẽ tự động phân tích tư thế
+2. Theo dõi thống kê:
    - Xem thời gian làm việc
    - Theo dõi % tư thế tốt
    - Nhận cảnh báo khi cần
-2. Tư thế được nhận diện:
+3. Tư thế được nhận diện:
    - Ngồi thẳng: Tư thế tốt
    - Cúi đầu: Cần điều chỉnh
    - Ngả người: Cần điều chỉnh
    - Quay trái/phải: Cần điều chỉnh
    - Chống tay: Cần điều chỉnh
-3. Cách tính điểm tập trung:
+4. Cách tính điểm tập trung:
    - Ngồi thẳng: 100 %      - Cúi đầu: 40 %
    - Ngả người: 60 %        - Quay trái/phải: 70 %   
    - Chống tay: 80 % 
    - Thời gian tư thế cần tính 
         = tgian bắt đầu tư thế sau - tgian bắt đầu tư thế cần tính
-Lưu ý: Ngồi cách camera 60-100cm để đạt độ chính xác tốt nhất.
-        Phải chọn độ nhạy trước khi bắt đầu giám sát."""
+Lưu ý: Ngồi cách camera 60-100cm để đạt độ chính xác tốt nhất."""
         
         help_window = tk.Toplevel(self.root)
         help_window.title("Hướng dẫn sử dụng")
