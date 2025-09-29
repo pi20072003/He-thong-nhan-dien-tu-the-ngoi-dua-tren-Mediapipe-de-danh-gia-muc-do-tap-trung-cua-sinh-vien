@@ -278,60 +278,6 @@ class PostureMonitoringGUI:
                                         fg='#374151', bg='#f3f4f6')
         self.confidence_label.pack(pady=(0, 12))
 
-    def setup_session_stats(self, parent):
-        """Thống kê phiên làm việc"""
-        stats_frame = self.create_card(parent, "Thống kê phiên làm việc")
-        stats_frame.pack(fill='x', pady=(0, 15))
-        
-        stats_container = tk.Frame(stats_frame, bg='white')
-        stats_container.pack(fill='x', padx=15, pady=(0, 15))
-        
-        # Time stat
-        time_frame = self.create_stat_box(stats_container, "00:00:00", "Thời gian làm việc", 
-                                         '#3b82f6', '#dbeafe')
-        time_frame.pack(side='left', fill='both', expand=True, padx=(0, 8))
-        self.session_time_label = time_frame.children['!label']
-        
-        # Good posture stat
-        good_frame = self.create_stat_box(stats_container, "0%", "Tư thế tốt", 
-                                         '#10b981', '#d1fae5')
-        good_frame.pack(side='left', fill='both', expand=True, padx=(4, 4))
-        self.good_posture_label = good_frame.children['!label']
-        
-        # Alerts stat
-        alert_frame = self.create_stat_box(stats_container, "0", "Cảnh báo", 
-                                          '#ef4444', '#fee2e2')
-        alert_frame.pack(side='left', fill='both', expand=True, padx=(8, 0))
-        self.alerts_count_label = alert_frame.children['!label']
-    
-    def setup_right_column_scroll(self, parent):
-        """Cột phải với scroll"""
-        # Canvas cho scroll
-        right_canvas = tk.Canvas(parent, bg='#f8fafc', highlightthickness=0)
-        right_scrollbar = ttk.Scrollbar(parent, orient="vertical", command=right_canvas.yview)
-        right_scrollable = tk.Frame(right_canvas, bg='#f8fafc')
-        
-        right_scrollable.bind(
-            "<Configure>",
-            lambda e: right_canvas.configure(scrollregion=right_canvas.bbox("all"))
-        )
-        
-        right_canvas.create_window((0, 0), window=right_scrollable, anchor="nw")
-        right_canvas.configure(yscrollcommand=right_scrollbar.set)
-        
-        right_canvas.pack(side="left", fill="both", expand=True)
-        right_scrollbar.pack(side="right", fill="y")
-        
-        # Mouse wheel scroll
-        def _on_right_mousewheel(event):
-            right_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        right_canvas.bind("<MouseWheel>", _on_right_mousewheel)
-        
-        # Right column content
-        self.setup_quick_stats(right_scrollable)
-        self.setup_recent_history(right_scrollable)
-        self.setup_settings_panel(right_scrollable)
-    
     def setup_alerts_panel(self, parent):
         """Panel cảnh báo"""
         alerts_frame = self.create_card(parent, "Cảnh báo")
@@ -853,21 +799,6 @@ class PostureMonitoringGUI:
         # Cập nhật số lượng cảnh báo
         self.alerts_count_label.config(text=str(self.alerts_count))
     
-    def toggle_fullscreen(self):
-        """Chuyển đổi chế độ toàn màn hình"""
-        try:
-            if self.root.attributes('-fullscreen'):
-                self.root.attributes('-fullscreen', False)
-                self.root.state('zoomed')
-            else:
-                self.root.attributes('-fullscreen', True)
-        except:
-            # Fallback cho hệ thống không hỗ trợ
-            try:
-                self.root.state('zoomed')
-            except:
-                pass
-    
     def export_report(self):
         """Xuất báo cáo"""
         from tkinter import filedialog
@@ -1085,78 +1016,6 @@ Phát triển bởi: Đỗ Quang Huy - pi2007
 """
         messagebox.showinfo("Thông tin Hệ thống giám sát ", about_text)
     
-    def open_settings(self):
-        """Mở cài đặt tổng quát"""
-        settings_window = tk.Toplevel(self.root)
-        settings_window.title("Cài đặt")
-        settings_window.geometry("400x300")
-        settings_window.resizable(False, False)
-        settings_window.configure(bg='#f8fafc')
-        settings_window.transient(self.root)
-        settings_window.grab_set()
-        
-        # Title
-        title_label = tk.Label(settings_window, text="Cài đặt Hệ thống giám sát ", 
-                              font=('Segoe UI', 14, 'bold'), 
-                              fg='#1f2937', bg='#f8fafc')
-        title_label.pack(pady=(20, 15))
-        
-        # Settings frame
-        settings_frame = tk.Frame(settings_window, bg='white', relief='solid', bd=1)
-        settings_frame.pack(fill='both', expand=True, padx=20, pady=(0, 20))
-        
-        # Alert sensitivity
-        sensitivity_frame = tk.Frame(settings_frame, bg='white')
-        sensitivity_frame.pack(fill='x', padx=15, pady=15)
-        
-        tk.Label(sensitivity_frame, text="Độ nhạy cảnh báo:", 
-                font=('Segoe UI', 10), fg='#374151', bg='white').pack(anchor='w')
-        
-        sensitivity_var = tk.StringVar(value="Trung bình")
-        sensitivity_combo = ttk.Combobox(sensitivity_frame, textvariable=sensitivity_var,
-                                       values=["Thấp", "Trung bình", "Cao"], state="readonly")
-        sensitivity_combo.pack(fill='x', pady=(5, 0))
-        
-        # Auto start
-        auto_start_frame = tk.Frame(settings_frame, bg='white')
-        auto_start_frame.pack(fill='x', padx=15, pady=10)
-        
-        auto_start_var = tk.BooleanVar()
-        auto_start_check = tk.Checkbutton(auto_start_frame, 
-                                         text="Tự động bắt đầu giám sát khi khởi động",
-                                         variable=auto_start_var, bg='white', 
-                                         font=('Segoe UI', 9))
-        auto_start_check.pack(anchor='w')
-        
-        # Notification
-        notification_frame = tk.Frame(settings_frame, bg='white')
-        notification_frame.pack(fill='x', padx=15, pady=10)
-        
-        notification_var = tk.BooleanVar(value=True)
-        notification_check = tk.Checkbutton(notification_frame, 
-                                           text="Hiển thị thông báo cảnh báo",
-                                           variable=notification_var, bg='white', 
-                                           font=('Segoe UI', 9))
-        notification_check.pack(anchor='w')
-        
-        # Buttons
-        button_frame = tk.Frame(settings_frame, bg='white')
-        button_frame.pack(fill='x', padx=15, pady=15)
-        
-        def save_settings():
-            messagebox.showinfo("Thông báo", "Cài đặt đã được lưu!")
-            settings_window.destroy()
-        
-        save_btn = tk.Button(button_frame, text="Lưu cài đặt", command=save_settings,
-                           bg='#3b82f6', fg='white', font=('Segoe UI', 9, 'bold'),
-                           padx=20, pady=8, relief='flat')
-        save_btn.pack(side='right')
-        
-        cancel_btn = tk.Button(button_frame, text="Hủy", command=settings_window.destroy,
-                             bg='#6b7280', fg='white', font=('Segoe UI', 9),
-                             padx=20, pady=8, relief='flat')
-        cancel_btn.pack(side='right', padx=(0, 10))
-
 def main():
     root = tk.Tk()
     
