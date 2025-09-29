@@ -55,9 +55,7 @@ class PostureMonitoringGUI:
         
         self.posture_buffer = deque(maxlen=10) # Buffer để làm mượt dự đoán
         # Lưu trữ dữ liệu
-        self.posture_history = deque(maxlen=100)
         self.recent_alerts = deque(maxlen=10)
-        self.daily_stats = {"good_time": 0, "bad_time": 0, "alerts": 0}
         
         # Các thành phần mô hình
         self.model = None
@@ -67,7 +65,6 @@ class PostureMonitoringGUI:
         
         # Camera
         self.cap = None
-        self.current_frame = None
         
         # MediaPipe
         if MODULES_AVAILABLE:
