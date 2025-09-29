@@ -91,16 +91,17 @@ class PostureMonitoringGUI:
         max_height = min(int(screen_height * 0.8), 850)
         
         # Đảm bảo kích thước tối thiểu
-        width = max(max_width, 1100)
-        height = max(max_height, 700)
+        width = max(max_width, 1200)
+        height = max(max_height, 750)
         
         # Căn giữa cửa sổ
         x = (screen_width - width) // 2
         y = (screen_height - height) // 2
         
         self.root.geometry(f"{width}x{height}+{x}+{y}")
-        self.root.minsize(1100, 700)
-        self.root.resizable(True, True)
+        self.root.minsize(1200, 750)
+        self.root.maxsize(1200, 750)
+        self.root.resizable(False, False)
         
         # Lưu kích thước để sử dụng trong layout
         self.window_width = width
@@ -147,32 +148,43 @@ class PostureMonitoringGUI:
         left_column.pack(side='left', fill='y', padx=(0, 15))
         self.setup_camera_section(left_column)
         
-        # Right column (cảnh báo + thống kê phiên làm việc)
+        # Right column (cảnh báo + thống kê phiên làm việc + cài đặt)
         right_column = tk.Frame(content_frame, bg='#f8fafc')
-        right_column.pack(side='left', fill='y', padx=(0, 15))
-        
-        # KHÔNG tạo status_frame ở đây nữa
-        
-        # Ô cảnh báo
-        self.setup_alerts_panel(right_column)
-        
+        right_column.pack(side='left', fill='y', expand=True)
+
+        # Chia thành 2 cột nhỏ: thống kê + cài đặt | cảnh báo
+        left_right_split = tk.Frame(right_column, bg='#f8fafc')
+        left_right_split.pack(fill='both', expand=True)
+
+        # Cột trái trong phần phải: Thống kê + Cài đặt
+        stats_settings_col = tk.Frame(left_right_split, bg='#f8fafc')
+        stats_settings_col.pack(side='left', fill='y', padx=(0, 15))
+
         # Ô thống kê phiên làm việc
-        stats_frame = self.create_card(right_column, "Thống kê phiên làm việc")
+        stats_frame = self.create_card(stats_settings_col, "Thống kê phiên làm việc")
         stats_frame.pack(fill='x', pady=(0, 15))
         stats_container = tk.Frame(stats_frame, bg='white')
         stats_container.pack(fill='x', padx=15, pady=(0, 15))
+
         time_frame = self.create_stat_box(stats_container, "00:00:00", "Thời gian làm việc", '#3b82f6', '#dbeafe')
         time_frame.pack(fill='x', pady=(0, 8))
         self.session_time_label = time_frame.children['!label']
+
         good_frame = self.create_stat_box(stats_container, "0%", "Tư thế tốt", '#10b981', '#d1fae5')
         good_frame.pack(fill='x', pady=(0, 8))
         self.good_posture_label = good_frame.children['!label']
+
         alert_frame = self.create_stat_box(stats_container, "0", "Cảnh báo", '#ef4444', '#fee2e2')
         alert_frame.pack(fill='x', pady=(0, 8))
         self.alerts_count_label = alert_frame.children['!label']
-        
+
         # Ô cài đặt
-        self.setup_settings_panel(right_column)
+        self.setup_settings_panel(stats_settings_col)
+
+        # Ô cảnh báo
+        alerts_col = tk.Frame(left_right_split, bg='#f8fafc')
+        alerts_col.pack(side='left', fill='y')
+        self.setup_alerts_panel(alerts_col)
     
     def setup_camera_section(self, parent):
         """Camera section với vùng CỐ ĐỊNH TUYỆT ĐỐI"""
@@ -309,15 +321,19 @@ class PostureMonitoringGUI:
         self.sensitivity_combo.pack(fill='x', pady=(0, 10))
         
         # Buttons
-        buttons = [
-            ("Xuất báo cáo", self.export_report, '#059669'),
-            ("Cài đặt Camera", self.camera_settings, '#7c3aed')]
-        
-        for text, command, color in buttons:
-            btn = tk.Button(settings_container, text=text, command=command,
-                           bg=color, fg='white', font=('Segoe UI', 8),
-                           padx=12, pady=4, relief='flat')
-            btn.pack(fill='x', pady=1)
+        # Tạo nút xuất báo cáo có thể khóa/mở
+        self.export_btn = tk.Button(settings_container, text="Xuất báo cáo", 
+                                    command=self.export_report,
+                                    bg='#059669', fg='white', font=('Segoe UI', 8, 'bold'),
+                                    padx=12, pady=4, relief='flat')
+        self.export_btn.pack(fill='x', pady=1)
+
+        # Nút cài đặt camera
+        self.camera_btn = tk.Button(settings_container, text="Cài đặt Camera", 
+                                    command=self.camera_settings,
+                                    bg='#7c3aed', fg='white', font=('Segoe UI', 8, 'bold'),
+                                    padx=12, pady=4, relief='flat')
+        self.camera_btn.pack(fill='x', pady=1)
     
     def create_card(self, parent, title):
         """Tạo card với header"""
@@ -403,6 +419,7 @@ class PostureMonitoringGUI:
             if not self.sensitivity_var.get():
                 self.sensitivity_var.set("Trung bình (≥70%)")
             self.sensitivity_combo.config(state="disabled") # Khóa combobox độ nhạy khi bắt đầu giám sát
+            self.export_btn.config(state="disabled")         # KHÓA NÚT XUẤT BÁO CÁO KHI ĐANG GIÁM SÁT
 
             # THÊM PHẦN TỬ ĐẦU TIÊN VÀO LỊCH SỬ - CHỈ MỘT LẦN
             initial_posture = self.current_posture if self.current_posture else "unknown"
@@ -428,6 +445,7 @@ class PostureMonitoringGUI:
             self.cap.release()
         
         self.sensitivity_combo.config(state="readonly") #Mở lại combobox để chọn lại độ nhạy
+        self.export_btn.config(state="normal")           # MỞ LẠI NÚT XUẤT BÁO CÁO
 
         # Update UI
         self.start_btn.config(text="Bắt đầu giám sát", bg='#3b82f6')
@@ -641,7 +659,7 @@ class PostureMonitoringGUI:
         """
         posture_names = {
             "ngoi thang": "Ngồi thẳng",
-            "guc dau": "Cúi đầu", 
+            "guc dau": "Gục đầu", 
             "nga nguoi": "Ngả người",
             "quay trai": "Quay trái",
             "quay phai": "Quay phải",
@@ -686,7 +704,7 @@ class PostureMonitoringGUI:
 
         # Tên cảnh báo tiếng Việt
         alert_names = {
-                "guc dau": "Tư thế không tốt: Cúi đầu",
+                "guc dau": "Tư thế không tốt: Gục đầu",
                 "nga nguoi": "Tư thế không tốt: Ngả người",
                 "ngoi thang": "Tư thế tốt: Ngồi thẳng",
                 "quay trai": "Tư thế không tốt: Quay trái",
@@ -964,12 +982,12 @@ class PostureMonitoringGUI:
    - Nhận cảnh báo khi cần
 3. Tư thế được nhận diện:
    - Ngồi thẳng: Tư thế tốt
-   - Cúi đầu: Cần điều chỉnh
+   - Gục đầu: Cần điều chỉnh
    - Ngả người: Cần điều chỉnh
    - Quay trái/phải: Cần điều chỉnh
    - Chống tay: Cần điều chỉnh
 4. Cách tính điểm tập trung:
-   - Ngồi thẳng: 100 %      - Cúi đầu: 40 %
+   - Ngồi thẳng: 100 %      - Gục đầu: 40 %
    - Ngả người: 60 %        - Quay trái/phải: 70 %   
    - Chống tay: 80 % 
    - Thời gian tư thế cần tính 
@@ -1015,7 +1033,6 @@ Phát triển bởi: Đỗ Quang Huy - pi2007
     
 def main():
     root = tk.Tk()
-    
     # Keyboard shortcuts
     def toggle_monitoring_key(event):
         app.toggle_monitoring()
