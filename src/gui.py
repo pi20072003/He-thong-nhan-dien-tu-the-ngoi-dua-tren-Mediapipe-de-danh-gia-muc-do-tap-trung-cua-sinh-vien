@@ -2,6 +2,7 @@
 
 import tkinter as tk
 from tkinter import ttk, messagebox
+from tkinter import filedialog
 import cv2
 import numpy as np
 from PIL import Image, ImageTk
@@ -27,11 +28,13 @@ class PostureMonitoringGUI:
         self.root.title("Hệ Thống Giám Sát Tư Thế")
 
         # lưu (thời gian, tư thế, % tập trung)
-        self.history = []  
+        self.history = []  # Lịch sử tư thế trong phiên làm việc
+        self.log_records = []  # Lưu log chi tiết từng giây
+
         self.focus_scores = {
-                "ngoi thang": 100,  "guc dau": 40,  "nga nguoi": 60,
+                "ngoi thang": 100,  "guc dau": 40,      "nga nguoi": 60,
                 "quay trai": 70,    "quay phai": 70,    "chong tay": 80,
-                "unknown": 0 }
+                "khong thay nguoi": 0,                  "unknown": 0 }
         # Tự động điều chỉnh kích thước theo màn hình
         self.setup_window_size()
         self.root.configure(bg='#f8fafc')
@@ -61,7 +64,8 @@ class PostureMonitoringGUI:
         self.model = None
         self.scaler = None
         self.labels = {"0": "ngoi thang", "1": "guc dau", "2": "nga nguoi",
-                       "3": "quay trai", "4": "quay phai", "5": "chong tay"}
+                       "3": "quay trai", "4": "quay phai", "5": "chong tay",
+                       "6": "khong thay nguoi"}
         
         # Camera
         self.cap = None
@@ -328,6 +332,13 @@ class PostureMonitoringGUI:
                                     padx=12, pady=4, relief='flat')
         self.export_btn.pack(fill='x', pady=1)
 
+        # Nút Xuất file log có thể khóa/mở
+        self.export_log_btn =  tk.Button(settings_container, text="Xuất file log",
+                                            command=self.export_log,
+                                            bg="#3b82f6", fg="white", font=('Segoe UI', 8, 'bold'),
+                                            padx=12, pady=4, relief='flat')
+        self.export_log_btn.pack(fill='x', pady=1)
+
         # Nút cài đặt camera
         self.camera_btn = tk.Button(settings_container, text="Cài đặt Camera", 
                                     command=self.camera_settings,
@@ -409,6 +420,7 @@ class PostureMonitoringGUI:
             # Reset tất cả biến trạng thái
             self.history = []  # reset lịch sử tư thế
             self.posture_buffer.clear()
+            self.log_records.clear()
             self.session_time = 0
             self.good_posture_time = 0
             self.alerts_count = 0
@@ -420,6 +432,7 @@ class PostureMonitoringGUI:
                 self.sensitivity_var.set("Trung bình (≥70%)")
             self.sensitivity_combo.config(state="disabled") # Khóa combobox độ nhạy khi bắt đầu giám sát
             self.export_btn.config(state="disabled")         # KHÓA NÚT XUẤT BÁO CÁO KHI ĐANG GIÁM SÁT
+            self.export_log_btn.config(state="disabled")   # KHÓA NÚT XUẤT FILE LOG KHI ĐANG GIÁM SÁT
 
             # THÊM PHẦN TỬ ĐẦU TIÊN VÀO LỊCH SỬ - CHỈ MỘT LẦN
             initial_posture = self.current_posture if self.current_posture else "unknown"
@@ -440,12 +453,15 @@ class PostureMonitoringGUI:
     def stop_monitoring(self):
         """Dừng giám sát"""
         self.is_monitoring = False
+        self.monitor_stop_time = time.time()
         
         if self.cap:
             self.cap.release()
         
         self.sensitivity_combo.config(state="readonly") #Mở lại combobox để chọn lại độ nhạy
         self.export_btn.config(state="normal")           # MỞ LẠI NÚT XUẤT BÁO CÁO
+        self.export_log_btn.config(state="normal")  # MỞ LẠI NÚT XUẤT FILE LOG
+
 
         # Update UI
         self.start_btn.config(text="Bắt đầu giám sát", bg='#3b82f6')
@@ -460,6 +476,8 @@ class PostureMonitoringGUI:
         """Vòng lặp xử lý camera"""
         if not self.mp_pose:
             return
+        if not self.session_start_time:
+            self.session_start_time = time.time()
 
         with self.mp_pose.Pose(
             static_image_mode=False,
@@ -512,7 +530,7 @@ class PostureMonitoringGUI:
                                     threshold = 0.70  # Mặc định Trung bình
 
                                 # QUAN TRỌNG: Chỉ xử lý nếu đạt ngưỡng độ tin cậy
-                                if count >= STABILITY_THRESHOLD and self.confidence >= threshold:
+                                if count >= STABILITY_THRESHOLD and (self.confidence >= threshold or stable_posture == "khong thay nguoi"):
                                     session_time = int(time.time() - self.session_start_time)
 
                                     # KIỂM TRA KỸ TRƯỚC KHI THÊM VÀO HISTORY
@@ -538,6 +556,8 @@ class PostureMonitoringGUI:
 
                                     if should_add_to_history:
                                         self.history.append((session_time, stable_posture))
+                                        if not self.log_records or self.log_records[-1][0] != session_time:
+                                            self.log_records.append((session_time, stable_posture))
                                         print(f"Đã thêm vào history: {session_time}s - {stable_posture} (Độ tin cậy: {self.confidence:.1%}, Ngưỡng: {threshold:.0%})")
 
                                     # Cập nhật current_posture
@@ -551,6 +571,24 @@ class PostureMonitoringGUI:
 
                         # Update UI
                         self.root.after(0, self.update_posture_display)
+                else:
+                    # Không thấy người
+                    self.current_posture = "khong thay nguoi"
+                    self.confidence = 0.0
+                    self.posture_buffer.append("khong thay nguoi")
+
+                    # Ghi vào lịch sử nếu trạng thái thay đổi
+                    if len(self.posture_buffer) >= 5 and self.posture_buffer.count("khong thay nguoi") >= 3:
+                        session_time = int(time.time() - self.session_start_time)
+                        if not self.history or self.history[-1][1] != "khong thay nguoi":
+                            self.history.append((session_time, "khong thay nguoi"))
+                            print(f"Đã thêm vào history: {session_time}s - khong thay nguoi")
+                            if not self.log_records or self.log_records[-1][0] != session_time:
+                                self.log_records.append((session_time, "khong thay nguoi"))
+                    # Gọi kiểm tra cảnh báo riêng cho trạng thái này
+                    self.check_alerts("khong thay nguoi")
+                    # Cập nhật hiển thị
+                    self.root.after(0, self.update_posture_display)
 
                 # Convert và hiển thị với kích thước CỐ ĐỊNH
                 try:
@@ -581,6 +619,11 @@ class PostureMonitoringGUI:
                     self.root.after(0, lambda img=frame_tk: self.update_camera_display(img))
                 except Exception as e:
                     print(f"Lỗi xử lý hình ảnh: {e}")
+
+                # Ghi log mỗi giây
+                session_time = int(time.time() - self.session_start_time)
+                if not self.log_records or self.log_records[-1][0] < session_time:
+                    self.log_records.append((session_time, self.current_posture))
 
                 time.sleep(0.03)  # ~30 FPS
 
@@ -664,6 +707,7 @@ class PostureMonitoringGUI:
             "quay trai": "Quay trái",
             "quay phai": "Quay phải",
             "chong tay": "Chống tay",
+            "khong thay nguoi": "Không thấy người",
             "unknown": "Chưa xác định"
         }
         display_name = posture_names.get(self.current_posture, self.current_posture)
@@ -676,12 +720,36 @@ class PostureMonitoringGUI:
         # Cập nhật màu nhãn tư thế
         if self.current_posture == "ngoi thang":
             self.posture_label.config(fg='#10b981')  # Xanh lá
+        elif self.current_posture == "khong thay nguoi":
+            self.posture_label.config(fg='#6b7280')  # Xám
         else:
             self.posture_label.config(fg='#ef4444')  # Đỏ
     
     def check_alerts(self, posture):
         """Kiểm tra và tạo cảnh báo"""
         current_time = datetime.now()
+
+        # Xử lý riêng cho trạng thái không thấy người
+        if posture == "khong thay nguoi":
+            # Nếu chưa có thời gian bắt đầu mất người thì đặt
+            if not hasattr(self, 'no_person_start_time'):
+                self.no_person_start_time = current_time
+            else:
+                duration = (current_time - self.no_person_start_time).total_seconds()
+                # Nếu mất liên tục >= 60s thì mới cảnh báo
+                if duration >= 60:
+                    if not self.last_alert_time or (current_time - self.last_alert_time).total_seconds() >= 60:
+                        self.last_alert_time = current_time
+                        alert_message = "Không phát hiện người \ntrong 1 phút"
+                        self.recent_alerts.appendleft((current_time, alert_message))
+                        self.alerts_count += 1
+                        print(f"Đã thêm cảnh báo: {alert_message}")
+                        self.root.after(0, self.update_alerts_display)
+            return
+        else:
+            # Nếu thấy người trở lại, reset timer
+            if hasattr(self, 'no_person_start_time'):
+                del self.no_person_start_time
 
         # LẤY NGƯỠNG TỪ CÀI ĐẶT - ĐẢM BẢO ĐỒNG BỘ VỚI HISTORY
         sensitivity_text = self.sensitivity_var.get()
@@ -693,7 +761,7 @@ class PostureMonitoringGUI:
             threshold = 0.70  # mặc định Trung bình
 
         # QUAN TRỌNG: Đã được kiểm tra trong camera_loop, nhưng kiểm tra lại để chắc chắn
-        if self.confidence < threshold:
+        if posture != "khong thay nguoi" and self.confidence < threshold:
             return  # Bỏ qua nếu không đạt ngưỡng
 
         # Chỉ cảnh báo nếu đã qua thời gian cooldown
@@ -709,7 +777,7 @@ class PostureMonitoringGUI:
                 "ngoi thang": "Tư thế tốt: Ngồi thẳng",
                 "quay trai": "Tư thế không tốt: Quay trái",
                 "quay phai": "Tư thế không tốt: Quay phải",
-                "chong tay": "Tư thế không tốt: Chống tay"
+                "chong tay": "Tư thế không tốt: Chống tay",
         }
 
         alert_message = alert_names.get(posture, f"Tư thế: {posture}")
@@ -828,16 +896,16 @@ class PostureMonitoringGUI:
             if file_path:
                 with open(file_path, 'w', encoding='utf-8') as f:
                     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    f.write("BÁO CÁO GIÁM SÁT TƯ THẾ\n")
+                    f.write("==== BÁO CÁO GIÁM SÁT TƯ THẾ ====\n")
                     f.write("-" * 50 + "\n")
-                    f.write(f"Thời gian xuất báo cáo: {now_str}\n")
             
                     if hasattr(self, "session_start_datetime"):
                         f.write(f"Thời gian bắt đầu: {self.session_start_datetime.strftime('%Y-%m-%d %H:%M:%S')}\n")
                     if hasattr(self, "session_end_datetime"):
                         f.write(f"Thời gian kết thúc: {self.session_end_datetime.strftime('%Y-%m-%d %H:%M:%S')}\n")
-            
-                    f.write("-" * 50 + "\n")
+                    
+                    f.write(f"Thời gian xuất báo cáo: {now_str}\n")
+                    f.write("=" * 50 + "\n\n")
                     f.write(f"Độ nhạy cảnh báo: {self.sensitivity_var.get()}\n")
                     f.write(f"Thời gian làm việc: {self.session_time // 3600:02d}:{(self.session_time % 3600) // 60:02d}:{self.session_time % 60:02d}\n")
                     f.write(f"Số cảnh báo: {self.alerts_count}\n")
@@ -846,7 +914,7 @@ class PostureMonitoringGUI:
             
                     f.write("\n" + "=" * 50 + "\n")
                 
-                    f.write("THỐNG KÊ TƯ THẾ\n")
+                    f.write("\nTHỐNG KÊ TƯ THẾ\n")
                     f.write("-" * 50 + "\n")
             
                     # Thống kê số lần xuất hiện của mỗi tư thế
@@ -893,7 +961,7 @@ class PostureMonitoringGUI:
                             f.write("  Không có dữ liệu thống kê thời gian\n")
                 
                         # ĐÁNH GIÁ HIỆU SUẤT - SỬ DỤNG CÙNG CÁCH TÍNH VỚI GIAO DIỆN
-                        f.write("\n" + "=" * 50 + "\n")
+                        f.write("=" * 50 + "\n\n")
                         f.write("ĐÁNH GIÁ HIỆU SUẤT\n")
                         f.write("-" * 50 + "\n")
                 
@@ -913,7 +981,7 @@ class PostureMonitoringGUI:
                     else:
                         f.write("Không có dữ liệu lịch sử để thống kê.\n")
                 
-                    f.write("\n" + "=" * 50 + "\n")
+                    f.write("=" * 50 + "\n\n")
 
                     f.write("LỊCH SỬ THAY ĐỔI TƯ THẾ CHI TIẾT\n")
                     f.write("-" * 50 + "\n")
@@ -926,14 +994,55 @@ class PostureMonitoringGUI:
                             minutes = (timestamp % 3600) // 60
                             seconds = timestamp % 60
                             f.write(f"[{hours:02d}:{minutes:02d}:{seconds:02d}] {posture}\n")
-                    f.write("\n" + "=" * 50 + "\n")
+                    f.write("=" * 50 + "\n")
 
             messagebox.showinfo("Xuất báo cáo", f"Báo cáo đã được lưu: {file_path}\n")
         
         except Exception as e:
             messagebox.showerror("Lỗi", f"Không thể xuất báo cáo: {e}")
             print(f"Chi tiết lỗi export: {e}")
-    
+
+    def export_log(self):
+        """Xuất file log gồm thời gian giám sát và tư thế nhận dạng theo thời gian"""
+        if not self.log_records:
+            messagebox.showwarning("Cảnh báo", "Chưa có dữ liệu để xuất log.")
+            return
+
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[("Text Files", "*.txt")],
+            title="Lưu file log"
+        )
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, "w", encoding="utf-8") as f:
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                f.write("===== FILE LOG GIÁM SÁT TƯ THẾ =====\n")
+                start_dt = datetime.fromtimestamp(self.session_start_time)
+                f.write(f"Thời gian bắt đầu: {start_dt.strftime('%d/%m/%Y %H:%M:%S')}\n")
+                end_time = datetime.fromtimestamp(self.monitor_stop_time)
+                f.write(f"Thời gian dừng: {end_time.strftime('%d/%m/%Y %H:%M:%S')}\n")
+                f.write(f"Thời gian xuất file log: {now_str}\n")
+                f.write("=" * 50 + "\n\n")
+
+                f.write("THỜI GIAN - TƯ THẾ NHẬN DẠNG\n")
+                f.write("-------------------------------------\n")
+                # Ghi từng dòng trong history
+                max_time = int(self.monitor_stop_time - self.session_start_time)
+                for t, posture in self.log_records:
+                    if t > max_time:
+                        break  # Bỏ các dòng vượt quá thời gian dừng
+                    timestamp = time.strftime("%H:%M:%S", time.gmtime(t))
+                    f.write(f"{timestamp} - {posture}\n")
+
+            messagebox.showinfo("Hoàn tất", f"Đã xuất file log thành công:\n{file_path}")
+
+        except Exception as e:
+            messagebox.showerror("Lỗi", f"Không thể lưu file log:\n{e}")
+
+
     def camera_settings(self):
         """Cài đặt camera"""
         settings_window = tk.Toplevel(self.root)
@@ -989,7 +1098,7 @@ class PostureMonitoringGUI:
 4. Cách tính điểm tập trung:
    - Ngồi thẳng: 100 %      - Gục đầu: 40 %
    - Ngả người: 60 %        - Quay trái/phải: 70 %   
-   - Chống tay: 80 % 
+   - Chống tay: 80 %        - Không thấy người: 0 %
    - Thời gian tư thế cần tính 
         = tgian bắt đầu tư thế sau - tgian bắt đầu tư thế cần tính
 Lưu ý: Ngồi cách camera 60-100cm để đạt độ chính xác tốt nhất."""
