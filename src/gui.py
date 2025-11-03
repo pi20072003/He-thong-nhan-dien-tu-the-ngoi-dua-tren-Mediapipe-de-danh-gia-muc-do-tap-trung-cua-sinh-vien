@@ -10,9 +10,12 @@ import threading
 import time
 import json
 import os
-from datetime import datetime, timedelta    
+from datetime import datetime   
 import pickle
 from collections import deque
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
+
 
 # Import các thư viện cần thiết
 try:
@@ -52,6 +55,11 @@ class PostureMonitoringGUI:
         self.session_time = 0
         self.good_posture_time = 0
         self.alerts_count = 0
+        self.log_file_path = None
+        self.pie_canvas = None
+        self.longest_good_streak = 0
+        self.current_good_streak = 0
+
         
         self.last_alert_time = None
         self.alert_cooldown_seconds = 1  # Chỉ cảnh báo 1 lần mỗi giây
@@ -118,7 +126,6 @@ class PostureMonitoringGUI:
 
         self.create_header(main_container)
 
-        # Không tạo canvas và scrollbar nữa, chỉ dùng frame thường
         content_frame = tk.Frame(main_container, bg='#f8fafc')
         content_frame.pack(fill='both', expand=True)
 
@@ -189,7 +196,42 @@ class PostureMonitoringGUI:
         alerts_col = tk.Frame(left_right_split, bg='#f8fafc')
         alerts_col.pack(side='left', fill='y')
         self.setup_alerts_panel(alerts_col)
-    
+        
+# Khung biểu đồ phân tích (dưới ô cảnh báo)
+        # Frame ngoài có viền
+        chart_card = tk.Frame(alerts_col, bg="white", relief="solid", bd=1)
+        chart_card.pack(fill="x", pady=(0, 15))
+
+        # Tiêu đề nằm bên trong viền
+        chart_header = tk.Frame(chart_card, bg="white")
+        chart_header.pack(fill="x", padx=15, pady=(10, 5))
+
+        tk.Label(
+            chart_header, text="Biểu đồ đánh giá",
+            font=("Segoe UI", 10, "bold"),
+            bg="white", fg="#000000",
+            anchor="w").pack(side="left")
+
+        # Khung chứa biểu đồ
+        self.chart_border = tk.Frame(chart_card, bg="white", height=200, width=330)
+        self.chart_border.pack(fill="both", expand=True, padx=15, pady=(0, 10))
+        self.chart_border.pack_propagate(False)
+
+        # Khung con chứa nội dung biểu đồ
+        self.analysis_frame = tk.Frame(self.chart_border, bg="white")
+        self.analysis_frame.pack(fill="both", expand=True, padx=2, pady=2)
+        self.analysis_frame.pack_propagate(False)
+
+        # Placeholder khi chưa có file log
+        self.analysis_placeholder = tk.Label(
+            self.analysis_frame,
+            text="Thêm file log để đánh giá",
+            font=('Segoe UI', 9, 'italic'),
+            bg='white', fg='gray'
+        )
+        self.analysis_placeholder.pack(pady=20)
+        
+
     def setup_camera_section(self, parent):
         """Camera section với vùng CỐ ĐỊNH TUYỆT ĐỐI"""
          # Camera frame
@@ -294,7 +336,7 @@ class PostureMonitoringGUI:
     def setup_alerts_panel(self, parent):
         """Panel cảnh báo"""
         alerts_frame = self.create_card(parent, "Cảnh báo")
-        alerts_frame.pack(fill='x', pady=(0, 12))
+        alerts_frame.pack(fill='x', pady=(0, 15))
         
         self.alerts_container = tk.Frame(alerts_frame, bg='white', width=220, height=200)
         self.alerts_container.pack(fill='x', padx=15, pady=(0, 15))
@@ -338,6 +380,13 @@ class PostureMonitoringGUI:
                                             bg="#3b82f6", fg="white", font=('Segoe UI', 8, 'bold'),
                                             padx=12, pady=4, relief='flat')
         self.export_log_btn.pack(fill='x', pady=1)
+
+        # Nút duyệt file log (Browse)
+        self.browse_log_btn = tk.Button(settings_container, text="Browse file log",
+                                        command=self.browse_log_file,
+                                        bg='#e5e7eb', fg='black', font=('Segoe UI', 8, 'bold'),
+                                        padx=12, pady=4, relief='flat')
+        self.browse_log_btn.pack(fill='x', pady=1)
 
         # Nút cài đặt camera
         self.camera_btn = tk.Button(settings_container, text="Cài đặt Camera", 
@@ -413,6 +462,14 @@ class PostureMonitoringGUI:
             if not self.cap.isOpened():
                 messagebox.showerror("Lỗi", "Không thể mở camera!")
                 return
+            
+            # Reset và ẩn biểu đồ khi bắt đầu giám sát
+            if self.pie_canvas:
+                self.pie_canvas.get_tk_widget().destroy()
+                self.pie_canvas = None
+            # Hiện lại placeholder
+            if hasattr(self, "analysis_placeholder"):
+                self.analysis_placeholder.pack(pady=20)
 
             self.is_monitoring = True
             self.session_start_time = time.time()
@@ -430,9 +487,11 @@ class PostureMonitoringGUI:
             # Đảm bảo sensitivity có giá trị mặc định
             if not self.sensitivity_var.get():
                 self.sensitivity_var.set("Trung bình (≥70%)")
+
             self.sensitivity_combo.config(state="disabled") # Khóa combobox độ nhạy khi bắt đầu giám sát
             self.export_btn.config(state="disabled")         # KHÓA NÚT XUẤT BÁO CÁO KHI ĐANG GIÁM SÁT
             self.export_log_btn.config(state="disabled")   # KHÓA NÚT XUẤT FILE LOG KHI ĐANG GIÁM SÁT
+            self.browse_log_btn.config(state="disabled")  # Ẩn nút Browse
 
             # THÊM PHẦN TỬ ĐẦU TIÊN VÀO LỊCH SỬ - CHỈ MỘT LẦN
             initial_posture = self.current_posture if self.current_posture else "unknown"
@@ -441,7 +500,7 @@ class PostureMonitoringGUI:
             # Update UI
             self.start_btn.config(text="Dừng giám sát", bg='#ef4444')
             self.status_indicator.config(fg='#10b981')
-            self.status_text.config(text="Đang hoạt động")
+            self.status_text.config(text="Đang hoạt\nđộng")
         
             # Start camera thread
             self.camera_thread = threading.Thread(target=self.camera_loop, daemon=True)
@@ -461,7 +520,7 @@ class PostureMonitoringGUI:
         self.sensitivity_combo.config(state="readonly") #Mở lại combobox để chọn lại độ nhạy
         self.export_btn.config(state="normal")           # MỞ LẠI NÚT XUẤT BÁO CÁO
         self.export_log_btn.config(state="normal")  # MỞ LẠI NÚT XUẤT FILE LOG
-
+        self.browse_log_btn.config(state="normal")  # Hiện lại nút Browse
 
         # Update UI
         self.start_btn.config(text="Bắt đầu giám sát", bg='#3b82f6')
@@ -1041,6 +1100,86 @@ class PostureMonitoringGUI:
 
         except Exception as e:
             messagebox.showerror("Lỗi", f"Không thể lưu file log:\n{e}")
+
+    def browse_log_file(self):
+        file_path = filedialog.askopenfilename(filetypes=[("Text files","*.txt")])
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, encoding="utf-8") as f:
+                lines = f.readlines()
+
+            # Kiểm tra file có đúng định dạng log
+            valid = False
+            for line in lines:
+                if "-" in line and any(pose in line for pose in self.focus_scores.keys()):
+                    valid = True
+                    break
+
+            if not valid:
+                messagebox.showerror("Lỗi", "File không hợp lệ, hãy chọn đúng file log!")
+                return
+
+            self.log_file_path = file_path
+            
+            # Hiện biểu đồ
+            if hasattr(self, "analysis_placeholder"):
+                self.analysis_placeholder.pack_forget()
+
+            self.show_log_analysis()
+
+        except Exception:
+            messagebox.showerror("Lỗi", "File không hợp lệ hoặc bị hỏng")
+
+
+    def show_log_analysis(self):
+        if not self.log_file_path:
+            return
+        
+        if self.is_monitoring:  # Chỉ hiển thị biểu đồ khi đã dừng giám sát
+            return
+        
+        # Ẩn placeholder nếu tồn tại
+        if hasattr(self, "analysis_placeholder") and self.analysis_placeholder.winfo_ismapped():
+            self.analysis_placeholder.pack_forget()
+
+        good = 0; total = 0; focus_sum = 0
+        with open(self.log_file_path, encoding='utf-8') as f:
+            for line in f:
+                if "-" not in line or ":" not in line:
+                    continue
+                try:
+                    _, posture = line.strip().split(" - ")
+                except:
+                    continue
+                total += 1
+                score = self.focus_scores.get(posture.strip(), 0)
+                focus_sum += score
+                if posture.strip() == "ngoi thang":
+                    good += 1
+        if total == 0:
+            return
+        good_pct = good / total * 100
+        avg_focus = focus_sum / total
+
+        if avg_focus >= 80:
+            level = "Tập trung cao"
+        elif avg_focus >= 50:
+            level = "Tập trung tương đối"
+        else:
+            level = "Không tập trung"
+        if hasattr(self, "analysis_label"):
+            self.analysis_label.pack_forget()
+        if self.pie_canvas:
+            self.pie_canvas.get_tk_widget().destroy()
+        fig = Figure(figsize=(2,2))
+        ax = fig.add_subplot(111)
+        ax.pie([good_pct, 100-good_pct], labels=["Tốt","Khác"], autopct="%1.0f%%")
+        ax.set_title(level, fontsize=8)
+
+        self.pie_canvas = FigureCanvasTkAgg(fig, master=self.analysis_frame)
+        self.pie_canvas.get_tk_widget().pack(expand=True)
 
 
     def camera_settings(self):
