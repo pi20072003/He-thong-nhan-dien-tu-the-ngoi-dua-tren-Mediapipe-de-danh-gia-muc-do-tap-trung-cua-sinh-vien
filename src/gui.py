@@ -960,13 +960,6 @@ class PostureMonitoringGUI:
         # Lưu lại vào biến good_posture_time để xuất báo cáo khớp
         self.good_posture_time = good_time
 
-
-        # Tính phần trăm tư thế tốt
-        #if self.session_time > 0:
-         #   good_percentage = (self.good_posture_time / self.session_time) * 100
-          #  self.good_posture_label.config(text=f"{good_percentage:.0f}%")
-        
-
     def export_report(self):
         """Xuất báo cáo"""
         from tkinter import filedialog
