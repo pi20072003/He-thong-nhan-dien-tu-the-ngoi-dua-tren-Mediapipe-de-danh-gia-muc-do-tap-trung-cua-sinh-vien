@@ -962,7 +962,6 @@ class PostureMonitoringGUI:
 
     def export_report(self):
         """Xuất báo cáo"""
-        from tkinter import filedialog
         self.cleanup_history()
         self.remove_duplicate_history()
 
