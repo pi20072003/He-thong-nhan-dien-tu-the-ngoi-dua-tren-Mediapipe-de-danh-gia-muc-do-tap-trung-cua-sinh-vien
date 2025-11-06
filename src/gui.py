@@ -937,14 +937,36 @@ class PostureMonitoringGUI:
         time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
         self.session_time_label.config(text=time_str)
         
-        # Tính phần trăm tư thế tốt
-        if self.session_time > 0:
-            good_percentage = (self.good_posture_time / self.session_time) * 100
-            self.good_posture_label.config(text=f"{good_percentage:.0f}%")
-        
+        # Tính lại thời gian tư thế tốt từ history
+        good_time = 0
+        if self.history and self.session_time > 0:
+            for i in range(len(self.history) - 1):
+                ts1, posture1 = self.history[i]
+                ts2, _ = self.history[i + 1]
+                if posture1 == "ngoi thang":
+                    good_time += (ts2 - ts1)
+            # Tính phần cuối cùng
+            last_ts, last_posture = self.history[-1]
+            if last_posture == "ngoi thang":
+                good_time += (self.session_time - last_ts)
+
+        # Cập nhật % tư thế tốt
+        good_percentage = (good_time / self.session_time) * 100 if self.session_time > 0 else 0
+        self.good_posture_label.config(text=f"{good_percentage:.0f}%")
+
         # Cập nhật số lượng cảnh báo
         self.alerts_count_label.config(text=str(self.alerts_count))
-    
+
+        # Lưu lại vào biến good_posture_time để xuất báo cáo khớp
+        self.good_posture_time = good_time
+
+
+        # Tính phần trăm tư thế tốt
+        #if self.session_time > 0:
+         #   good_percentage = (self.good_posture_time / self.session_time) * 100
+          #  self.good_posture_label.config(text=f"{good_percentage:.0f}%")
+        
+
     def export_report(self):
         """Xuất báo cáo"""
         from tkinter import filedialog
