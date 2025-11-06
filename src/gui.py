@@ -213,7 +213,7 @@ class PostureMonitoringGUI:
             anchor="w").pack(side="left")
 
         # Khung chứa biểu đồ
-        self.chart_border = tk.Frame(chart_card, bg="white", height=200, width=330)
+        self.chart_border = tk.Frame(chart_card, bg="white", height=185, width=330)
         self.chart_border.pack(fill="both", expand=True, padx=15, pady=(0, 10))
         self.chart_border.pack_propagate(False)
 
@@ -338,7 +338,7 @@ class PostureMonitoringGUI:
         alerts_frame = self.create_card(parent, "Cảnh báo")
         alerts_frame.pack(fill='x', pady=(0, 15))
         
-        self.alerts_container = tk.Frame(alerts_frame, bg='white', width=220, height=200)
+        self.alerts_container = tk.Frame(alerts_frame, bg='white', width=220, height=249)
         self.alerts_container.pack(fill='x', padx=15, pady=(0, 15))
         self.alerts_container.pack_propagate(False)
         
@@ -462,7 +462,11 @@ class PostureMonitoringGUI:
             if not self.cap.isOpened():
                 messagebox.showerror("Lỗi", "Không thể mở camera!")
                 return
-            
+            # Reset cảnh báo khi bắt đầu giám sát
+            self.recent_alerts.clear()  
+            self.alerts_count = 0       
+            self.update_alerts_display() 
+
             # Reset và ẩn biểu đồ khi bắt đầu giám sát
             if self.pie_canvas:
                 self.pie_canvas.get_tk_widget().destroy()
