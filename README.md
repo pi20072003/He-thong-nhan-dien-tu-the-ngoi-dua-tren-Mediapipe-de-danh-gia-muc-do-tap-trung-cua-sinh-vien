@@ -10,6 +10,9 @@
       Pandas: 2.3.1
       NumPy: 1.26.4
       Joblib: 1.5.1
+      Seaborn: 0.13.2
+      Matplotlib: 3.10.3
+
 
 2. Khuyến nghị môi trường:
    - Tạo một virtualenv riêng cho dự án:

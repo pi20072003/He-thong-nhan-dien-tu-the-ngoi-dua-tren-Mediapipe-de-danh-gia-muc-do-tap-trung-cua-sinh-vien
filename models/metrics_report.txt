@@ -1,0 +1,71 @@
+===== MODEL EVALUATION REPORT =====
+
+Validation Accuracy: 0.9582
+
+====== ACCURACY ======
+Accuracy: 0.9582
+
+====== PRECISION - RECALL - F1 ======
+              precision    recall  f1-score   support
+
+  ngoi thang     0.9451    0.9149    0.9297        94
+     guc dau     0.9310    0.9474    0.9391        57
+   nga nguoi     0.9672    0.9672    0.9672        61
+   quay trai     0.9672    0.9833    0.9752        60
+   quay phai     0.9455    1.0000    0.9720        52
+   chong tay     1.0000    0.9661    0.9828        59
+
+    accuracy                         0.9582       383
+   macro avg     0.9593    0.9632    0.9610       383
+weighted avg     0.9585    0.9582    0.9581       383
+
+====== CONFUSION MATRIX ======
+[[86  4  2  1  1  0]
+ [ 2 54  0  0  1  0]
+ [ 0  0 59  1  1  0]
+ [ 1  0  0 59  0  0]
+ [ 0  0  0  0 52  0]
+ [ 2  0  0  0  0 57]]
+
+====== LABEL MAPPING ======
+0: ngoi thang
+1: guc dau
+2: nga nguoi
+3: quay trai
+4: quay phai
+5: chong tay
+
+====== TRAINING PARAMETERS ======
+Epochs: 55
+Batch size: 16
+Optimizer: Adam (lr=0.001)
+Loss: sparse_categorical_crossentropy
+
+====== MODEL ARCHITECTURE ======
+Model: "sequential"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ dense (Dense)               (None, 128)               17024     
+                                                                 
+ batch_normalization (Batch  (None, 128)               512       
+ Normalization)                                                  
+                                                                 
+ dropout (Dropout)           (None, 128)               0         
+                                                                 
+ dense_1 (Dense)             (None, 64)                8256      
+                                                                 
+ batch_normalization_1 (Bat  (None, 64)                256       
+ chNormalization)                                                
+                                                                 
+ dropout_1 (Dropout)         (None, 64)                0         
+                                                                 
+ dense_2 (Dense)             (None, 32)                2080      
+                                                                 
+ dense_3 (Dense)             (None, 6)                 198       
+                                                                 
+=================================================================
+Total params: 28326 (110.65 KB)
+Trainable params: 27942 (109.15 KB)
+Non-trainable params: 384 (1.50 KB)
+_________________________________________________________________
