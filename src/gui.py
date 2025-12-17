@@ -1,5 +1,4 @@
 #Giao diện giám sát tư thế thông minh
-
 import tkinter as tk
 from tkinter import ttk, messagebox
 from tkinter import filedialog
@@ -17,7 +16,6 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import serial
 
-# Import các thư viện cần thiết
 try:
     import mediapipe as mp
     from tensorflow.keras.models import load_model
@@ -47,7 +45,7 @@ class PostureMonitoringGUI:
                 "ngoi thang": 100,  "guc dau": 40,      "nga nguoi": 60,
                 "quay trai": 70,    "quay phai": 70,    "chong tay": 80,
                 "khong thay nguoi": 0,                  "unknown": 0 }
-        # Tự động điều chỉnh kích thước theo màn hình
+        
         self.setup_window_size()
         self.root.configure(bg='#f8fafc')
         
@@ -111,7 +109,7 @@ class PostureMonitoringGUI:
         # Danh sách lưu trữ các nhãn cảnh báo
         self.alert_labels = []
     
-    # Hàm gửi UART tập trung
+    # Hàm gửi UART
     def send_led_command(self, cmd):
         """Gửi lệnh LED qua UART - chỉ gửi khi thay đổi"""
         if not SERIAL_AVAILABLE:
@@ -131,7 +129,7 @@ class PostureMonitoringGUI:
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         
-        # Tính toán kích thước cửa sổ (85% màn hình, tối đa 1300x850)
+        # kích thước cửa sổ (85% màn hình, tối đa 1300x850)
         max_width = min(int(screen_width * 0.85), 1300)
         max_height = min(int(screen_height * 0.8), 850)
         
@@ -309,24 +307,24 @@ class PostureMonitoringGUI:
                             fg='#374151', bg='white')
         self.status_text.pack(side='left', padx=(5, 0))
 
-        # Camera container - CỐ ĐỊNH TUYỆT ĐỐI
+        # Camera container
         camera_container_outer = tk.Frame(camera_frame, bg='white')
         camera_container_outer.pack(fill='x', padx=15, pady=(0, 15))
         
-        # Tính kích thước camera tối ưu nhưng CỐ ĐỊNH
+        # kích thước camera 
         base_width = min(int(self.window_width * 0.5), 700)  # Tối đa 700px
         base_height = int(base_width * 3 / 4)  # 4:3 ratio
         
-        # Container camera với kích thước CỐ ĐỊNH TUYỆT ĐỐI
+        # Container camera với kích thước cố định
         self.camera_container = tk.Frame(camera_container_outer, 
                                         bg='#1f2937', 
                                         relief='solid', bd=2,
                                         width=base_width, 
                                         height=base_height)
         self.camera_container.pack(anchor='center')  # Căn giữa
-        self.camera_container.pack_propagate(False)  # QUAN TRỌNG: Không thay đổi kích thước
+        self.camera_container.pack_propagate(False)  # Không thay đổi kích thước
         
-        # Label camera - đặt CỐ ĐỊNH bằng place()
+        # Label camera - đặt cố định bằng place()
         self.camera_label = tk.Label(self.camera_container, 
                                     text="Camera dừng\nBấm 'Bắt đầu giám sát' để khởi động",
                                     bg='#1f2937', fg='white',
@@ -414,7 +412,7 @@ class PostureMonitoringGUI:
                                             padx=12, pady=4, relief='flat')
         self.export_log_btn.pack(fill='x', pady=1)
 
-        # Nút duyệt file log (Browse)
+        # Nút duyệt file log (Browse) có thể khóa/mở
         self.browse_log_btn = tk.Button(settings_container, text="Browse file log",
                                         command=self.browse_log_file,
                                         bg='#e5e7eb', fg='black', font=('Segoe UI', 8, 'bold'),
@@ -497,9 +495,9 @@ class PostureMonitoringGUI:
                 messagebox.showerror("Lỗi", "Không thể mở camera!")
                 return
 
-            # Thiết lập thời gian bắt đầu TỪ ĐÂY CHUNG CHO TOÀN ỨNG DỤNG
+            # Thiết lập thời gian bắt đầu
             self.session_start_datetime = datetime.now()
-            self.session_start_time = time.time()  # optional but set once
+            self.session_start_time = time.time()
 
             # Reset trạng thái phiên
             self.is_monitoring = True
@@ -556,7 +554,6 @@ class PostureMonitoringGUI:
         except Exception as e:
             messagebox.showerror("Lỗi", f"Không thể bắt đầu giám sát: {e}")
 
-    
     def stop_monitoring(self):
         """Dừng giám sát"""
         # Ghi thời điểm dừng 1 lần ở đây
@@ -591,7 +588,6 @@ class PostureMonitoringGUI:
         self.camera_label.config(image="", text="Camera dừng\nBấm 'Bắt đầu giám sát' để khởi động")
         self.posture_label.config(text="Chưa xác định")
         self.confidence_label.config(text="0.0%")
-
     
     def camera_loop(self):
         """Vòng lặp xử lý camera"""
@@ -603,7 +599,7 @@ class PostureMonitoringGUI:
             model_complexity=1,
             enable_segmentation=False,
             min_detection_confidence=0.5,
-            min_tracking_confidence=0.5,
+            min_tracking_confidence=0.8,
         ) as pose:
 
             while self.is_monitoring and self.cap and self.cap.isOpened():
@@ -617,8 +613,7 @@ class PostureMonitoringGUI:
 
                 # ===== KIỂM TRA NGAY: KHÔNG THẤY NGƯỜI =====
                 if not results.pose_landmarks:
-                    # GỬI W NGAY LẬP TỨC
-                    self.send_led_command('W')
+                    self.send_led_command('W') # GỬI W khi không thấy người
                     self.good_posture_start_time = None
                     self.bad_posture_start_time = None
                     
@@ -666,7 +661,7 @@ class PostureMonitoringGUI:
                         print(f"Lỗi xử lý hình ảnh: {e}")
                     
                     time.sleep(0.03)
-                    continue  # BỎ QUA phần xử lý pose landmarks
+                    continue 
 
                 # ===== XỬ LÝ KHI CÓ PHÁT HIỆN NGƯỜI =====
                 self.mp_draw.draw_landmarks(frame, results.pose_landmarks, self.mp_pose.POSE_CONNECTIONS)
@@ -697,7 +692,7 @@ class PostureMonitoringGUI:
                             if count >= STABILITY_THRESHOLD and (self.confidence >= threshold or stable_posture == "khong thay nguoi"):
                                 session_time = self.session_time
 
-                                # Logic thêm vào history giữ nguyên...
+                                # thêm vào history khi tư thế ổn định thay đổi
                                 should_add_to_history = False
                                 if not self.history:
                                     should_add_to_history = True
@@ -754,7 +749,7 @@ class PostureMonitoringGUI:
                                     bad_time = current_time - self.bad_posture_start_time
                                     print(f"Thời gian giữ tư thế xấu: {bad_time:.1f}s ({stable_posture})")
 
-                                    # 3 cấp độ
+                                    # 3 cấp độ (đv giây)
                                     if bad_time >= 60:
                                         self.send_led_command('R')
                                     elif bad_time >= 30:
@@ -770,7 +765,7 @@ class PostureMonitoringGUI:
 
                     self.root.after(0, self.update_posture_display)
 
-                # Xử lý hiển thị camera (giữ nguyên code cũ)
+                # Xử lý hiển thị camera
                 try:
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     frame_pil = Image.fromarray(frame_rgb)
@@ -827,9 +822,7 @@ class PostureMonitoringGUI:
                     cleaned_history.append((timestamp, posture))
                     last_posture = posture
                 else:
-                    # Nếu trùng, chỉ cập nhật timestamp của mục cuối cùng
-                    if cleaned_history:
-                        cleaned_history[-1] = (timestamp, posture)
+                    continue
     
         self.history = cleaned_history
 
@@ -861,7 +854,7 @@ class PostureMonitoringGUI:
     def update_camera_display(self, image):
         """Cập nhật hiển thị camera"""
         self.camera_label.config(image=image, text="")
-        self.camera_label.image = image  # Keep reference
+        self.camera_label.image = image 
     
     def update_posture_display(self):
         """Cập nhật thông tin tư thế
@@ -932,7 +925,7 @@ class PostureMonitoringGUI:
         else:
             threshold = 0.70  # mặc định Trung bình
 
-        # QUAN TRỌNG: Đã được kiểm tra trong camera_loop, nhưng kiểm tra lại để chắc chắn
+        # Bỏ qua nếu không đạt ngưỡng, trừ khi là "khong thay nguoi"
         if posture != "khong thay nguoi" and self.confidence < threshold:
             return  # Bỏ qua nếu không đạt ngưỡng
 
@@ -957,7 +950,7 @@ class PostureMonitoringGUI:
         # Thêm vào danh sách cảnh báo gần đây
         self.recent_alerts.appendleft((current_time, alert_message))
     
-        # QUAN TRỌNG: Chỉ tăng số cảnh báo với tư thế xấu
+        # tăng số cảnh báo với tư thế xấu
         if posture != "ngoi thang":
             self.alerts_count += 1
             print(f"Đã thêm cảnh báo: {alert_message} (Độ tin cậy: {self.confidence:.1%}, Ngưỡng: {threshold:.0%})")
@@ -970,7 +963,6 @@ class PostureMonitoringGUI:
         max_alerts = 3
         alerts = list(self.recent_alerts)[:max_alerts]
 
-        # Nếu chưa có đủ label, tạo thêm
         while len(self.alert_labels) < max_alerts:
             frame = tk.Frame(self.alerts_container, bg='white')
             frame.pack(fill='x', expand=True, padx=3, pady=4)
@@ -1028,7 +1020,7 @@ class PostureMonitoringGUI:
                 delta = datetime.now() - self.session_start_datetime
                 self.session_time = int(delta.total_seconds())
 
-                # Cập nhật thời gian tư thế tốt mỗi giây (vẫn dùng current_posture)
+                # Cập nhật thời gian tư thế tốt mỗi giây
                 if self.current_posture == "ngoi thang":
                     self.good_posture_time += 1
 
@@ -1038,7 +1030,6 @@ class PostureMonitoringGUI:
             self.root.after(1000, update_timer)
         update_timer()
 
-    
     def update_session_stats(self):
         """Cập nhật thống kê phiên làm việc"""
         # Định dạng thời gian phiên
@@ -1148,17 +1139,16 @@ class PostureMonitoringGUI:
                         else:
                             f.write("  Không có dữ liệu thống kê thời gian\n")
                 
-                        # ĐÁNH GIÁ HIỆU SUẤT - SỬ DỤNG CÙNG CÁCH TÍNH VỚI GIAO DIỆN
+                        # ĐÁNH GIÁ HIỆU SUẤT
                         f.write("=" * 50 + "\n\n")
                         f.write("ĐÁNH GIÁ HIỆU SUẤT\n")
                         f.write("-" * 50 + "\n")
-                
-                        # QUAN TRỌNG: Sử dụng cùng cách tính với giao diện
+                        # Tính % thời gian tư thế tốt
                         good_posture_percentage_ui = (self.good_posture_time / self.session_time) * 100 if self.session_time > 0 else 0
                     
                         f.write(f"Thời gian tư thế tốt: {good_posture_percentage_ui:.1f}%\n")
                 
-                        # Tính điểm tập trung trung bình - SỬ DỤNG CÙNG CÁCH TÍNH
+                        # Tính điểm tập trung trung bình
                         focus_score_total = 0
                         for posture, time_spent in total_time_in_posture.items():
                             score = self.focus_scores.get(posture, 0)
@@ -1218,9 +1208,9 @@ class PostureMonitoringGUI:
                 f.write("THỜI GIAN - TƯ THẾ NHẬN DẠNG\n")
                 f.write("-------------------------------------\n")
                 # Ghi từng dòng trong history
-                #max_time = int(self.monitor_stop_time - self.session_start_time)
+                max_time = int(self.monitor_stop_time - self.session_start_time)
 
-                max_time = int((self.session_end_datetime - self.session_start_datetime).total_seconds())
+                #max_time = int((self.session_end_datetime - self.session_start_datetime).total_seconds())
 
                 for t, posture in self.log_records:
                     if t > max_time:
@@ -1263,7 +1253,6 @@ class PostureMonitoringGUI:
 
         except Exception:
             messagebox.showerror("Lỗi", "File không hợp lệ hoặc bị hỏng")
-
 
     def show_log_analysis(self):
         if not self.log_file_path:
@@ -1312,7 +1301,6 @@ class PostureMonitoringGUI:
 
         self.pie_canvas = FigureCanvasTkAgg(fig, master=self.analysis_frame)
         self.pie_canvas.get_tk_widget().pack(expand=True)
-
 
     def camera_settings(self):
         """Cài đặt camera"""
