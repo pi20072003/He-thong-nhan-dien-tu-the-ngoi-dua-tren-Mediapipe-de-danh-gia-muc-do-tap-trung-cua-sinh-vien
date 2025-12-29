@@ -13,13 +13,7 @@
       Seaborn: 0.13.2
       Matplotlib: 3.10.3
 
-
-2. Khuyến nghị môi trường:
-   - Tạo một virtualenv riêng cho dự án:
-        python -m venv .venv
-        .venv\Scripts\activate
-   - Cài phiên bản phù hợp:
-        pip install numpy opencv-python tensorflow scikit-learn PyQt5 mediapipe==0.10.21
+2. Cài đặt chi tiết trong folder setup
 
 3. Yêu cầu về số mẫu:
    - Do có 10 tư thế nên khi chia test_size = 20% cần có ít nhất 30-50 ảnh cho mỗi tư thế

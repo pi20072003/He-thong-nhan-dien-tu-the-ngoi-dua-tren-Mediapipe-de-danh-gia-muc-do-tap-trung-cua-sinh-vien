@@ -1,0 +1,21 @@
+1. click vào python-3.10.9-amd64.exe trong folder, tick vào "Add python.exe to PATH", "Install for all users".
+
+2. sau khi cài xong thì vào Powershell, check "python --version"
+    nếu đúng là 3.10.x thì tiến hành "pip install -r requirements.txt"
+    nếu không thì setup lại theo phía dưới
+
+3. chuyển về thư mục chứa Project "cd D:\Hethonggiamsat_danhgia_mucdotaptung"
+    tạo môi trường ảo "py -3.10 -m venv py3.10"
+    "dir py3.10" kiểm tra có các folder: Lib, Scripts, pyvenv.cfg
+    nếu đủ các folder và file thì gõ ".\py3.10\Scripts\Activate.ps1" để kích hoạt môi trường
+    nếu có hiện báo Disable thì gõ:
+		"Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned" 
+		nếu có hỏi "Do you want to change the execution policy?" thì nhấn "Y"
+		sau đó gõ lại ".\py3.10\Scripts\Activate.ps1" để kích hoạt môi trường
+    sau khi kích hoạt thì check lại version "python --version" phải đúng 3.10.x
+    khi đã đúng hết thì "pip install -r requirements.txt" để cài thư viện cần thiết
+
+4. sau khi đã hoàn thành hết thì "cd src" và "python gui.py" để chạy chương trình
+
+5. nếu muốn thoát môi trường ảo thì gõ "deactivate" để về lại ban đầu
+    muốn kích hoạt lại thì đứng ở đúng folder rồi gõ ".\py3.10\Scripts\Activate.ps1"
