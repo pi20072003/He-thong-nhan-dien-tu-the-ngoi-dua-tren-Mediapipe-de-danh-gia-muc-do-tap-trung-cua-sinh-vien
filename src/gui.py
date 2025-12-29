@@ -1202,6 +1202,7 @@ class PostureMonitoringGUI:
                 f.write(f"Thời gian bắt đầu: {start_dt.strftime('%d/%m/%Y %H:%M:%S')}\n")
                 end_time = datetime.fromtimestamp(self.monitor_stop_time)
                 f.write(f"Thời gian dừng: {end_time.strftime('%d/%m/%Y %H:%M:%S')}\n")
+                f.write(f"Thời gian làm việc: {self.session_time // 3600:02d}:{(self.session_time % 3600) // 60:02d}:{self.session_time % 60:02d}\n")
                 f.write(f"Thời gian xuất file log: {now_str}\n")
                 f.write("=" * 50 + "\n\n")
 
@@ -1224,7 +1225,10 @@ class PostureMonitoringGUI:
             messagebox.showerror("Lỗi", f"Không thể lưu file log:\n{e}")
 
     def browse_log_file(self):
-        file_path = filedialog.askopenfilename(filetypes=[("Text files","*.txt")])
+        file_path = filedialog.askopenfilename(
+            title="Chọn file log",
+            filetypes=[("Log files", "*.txt")]
+        )
         if not file_path:
             return
 
@@ -1232,27 +1236,36 @@ class PostureMonitoringGUI:
             with open(file_path, encoding="utf-8") as f:
                 lines = f.readlines()
 
-            # Kiểm tra file có đúng định dạng log
-            valid = False
-            for line in lines:
-                if "-" in line and any(pose in line for pose in self.focus_scores.keys()):
-                    valid = True
-                    break
+            def is_posture_line(line):
+                if " - " not in line:
+                    return False
+                time_part = line.split(" - ")[0].strip()
+                parts = time_part.split(":")
+                return len(parts) == 3 and all(p.isdigit() for p in parts)
 
-            if not valid:
-                messagebox.showerror("Lỗi", "File không hợp lệ, hãy chọn đúng file log!")
+            posture_lines = [l for l in lines if is_posture_line(l)]
+
+            # KHÔNG coi đây là file không hợp lệ
+            if not posture_lines:
+                messagebox.showwarning(
+                    "Chưa có dữ liệu",
+                    "File log này không có dữ liệu tư thế để phân tích."
+                )
                 return
 
+            # File hợp lệ → mới gán
             self.log_file_path = file_path
-            
-            # Hiện biểu đồ
+
             if hasattr(self, "analysis_placeholder"):
                 self.analysis_placeholder.pack_forget()
 
             self.show_log_analysis()
 
-        except Exception:
-            messagebox.showerror("Lỗi", "File không hợp lệ hoặc bị hỏng")
+        except Exception as e:
+            messagebox.showerror(
+                "Lỗi",
+                f"Không đọc được file log:\n{e}"
+            )
 
     def show_log_analysis(self):
         if not self.log_file_path:
@@ -1282,11 +1295,10 @@ class PostureMonitoringGUI:
         if total == 0:
             return
         good_pct = good / total * 100
-        avg_focus = focus_sum / total
-
-        if avg_focus >= 80:
+    
+        if good_pct >= 80:
             level = "Tập trung cao"
-        elif avg_focus >= 50:
+        elif good_pct >= 50:
             level = "Tập trung tương đối"
         else:
             level = "Không tập trung"
@@ -1405,26 +1417,16 @@ def main():
     def toggle_monitoring_key(event):
         app.toggle_monitoring()
     
-    def exit_app_key(event):
-        if app.is_monitoring:
-            app.stop_monitoring()
-        if SERIAL_AVAILABLE:
-            ser.close()
-        root.quit()
-    
-    app = PostureMonitoringGUI(root)
-    
-    root.bind('<F1>', toggle_monitoring_key)
-    root.bind('<Control-q>', exit_app_key)
-    root.bind('<Escape>', lambda e: app.stop_monitoring() if app.is_monitoring else None)
-    
     def on_closing():
         if app.is_monitoring:
             app.stop_monitoring()
         if SERIAL_AVAILABLE:
             ser.close()
         root.destroy()
+        
+    app = PostureMonitoringGUI(root)
     
+    root.bind('<F1>', toggle_monitoring_key)
     root.protocol("WM_DELETE_WINDOW", on_closing)
     root.focus_set()
     
