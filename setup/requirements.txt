@@ -1,0 +1,20 @@
+
+opencv-python==4.11.0.86
+mediapipe==0.10.21
+protobuf==4.25.3
+
+tensorflow==2.15.0
+scikit-learn==1.5.0
+
+numpy==1.26.4
+pandas==2.3.1
+
+matplotlib==3.8.2
+seaborn==0.13.2
+
+pyserial==3.5
+
+pydrive2
+
+
+#pip install -r requirements.txt
