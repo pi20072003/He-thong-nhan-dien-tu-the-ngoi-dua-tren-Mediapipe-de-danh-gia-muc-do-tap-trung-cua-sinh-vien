@@ -73,8 +73,16 @@ class PostureMonitoringGUI:
         # Google Drive
         self.drive = None
         self.setup_google_drive()
+        self.bad_posture_log = {}
+        self.last_uploaded_second = 0   # giây cuối đã upload
 
-        # Queue and background thread for Drive uploads to avoid blocking camera loop
+        self.active_posture = None          # tư thế đang theo dõi
+        self.active_start_time = None       # thời điểm bắt đầu theo dõi
+        self.last_logged_step = 0           # số bước 10s đã ghi (1 = 10s, 2 = 20s...)
+
+        self.bad_posture_log = {}
+        self.no_person_last_step = 0
+
         self.drive_queue = queue.Queue()
         self.drive_thread = threading.Thread(target=self._drive_worker, daemon=True)
         self.drive_thread.start()
@@ -472,6 +480,10 @@ class PostureMonitoringGUI:
             self.alerts_count = 0
             self.last_alert_time = None
             self.bad_posture_start_time = None
+            # Reset accumulated bad posture log (avoid carrying over between sessions)
+            self.bad_posture_log = {}
+            # Helper to track no-person upload steps (10s increments)
+            self.no_person_last_step = 0
             # helper to throttle bad-posture console prints (once per second)
             self.last_bad_print_time = 0
             self.good_posture_start_time = None
@@ -665,8 +677,8 @@ class PostureMonitoringGUI:
                                             #-print("Bad time:", bad_time)
 
                                             if bad_time >= 10:   # NGƯỠNG 10s
-                                                self.send_drive_alert(stable_posture, bad_time)
-                                                self.bad_posture_start_time = None   # reset để tránh spam
+                                                self.update_bad_posture_log(stable_posture, bad_time)
+                                                self.bad_posture_start_time = time.time()  # reset mốc đếm
 
                                         if self.bad_posture_start_time is None:
                                             self.bad_posture_start_time = current_time
@@ -873,18 +885,41 @@ class PostureMonitoringGUI:
 
         # Xử lý riêng cho không thấy người
         if posture == "khong thay nguoi":
+            # Start timer for no-person if not present
             if not hasattr(self, 'no_person_start_time'):
                 self.no_person_start_time = current_time
-            else:
-                duration = (current_time - self.no_person_start_time).total_seconds()
-                if duration >= 60:
-                    if not self.last_alert_time or (current_time - self.last_alert_time).total_seconds() >= 60:
-                        self.last_alert_time = current_time
-                        alert_message = "Không phát hiện người \ntrong 1 phút"
-                        self.recent_alerts.appendleft((current_time, alert_message))
-                        self.alerts_count += 1
-                        #-print(f"Đã thêm cảnh báo: {alert_message}")
-                        self.root.after(0, self.update_alerts_display)
+                self.no_person_last_step = 0
+                return
+
+            duration = (current_time - self.no_person_start_time).total_seconds()
+
+            # Send an upload to Drive every 10s (same logic as other bad postures)
+            try:
+                step = int(duration // 10)
+            except Exception:
+                step = 0
+
+            if step >= 1 and step > getattr(self, 'no_person_last_step', 0):
+                # delta time since last step
+                delta = duration - (getattr(self, 'no_person_last_step', 0) * 10)
+                if delta <= 0:
+                    delta = 10
+                self.no_person_last_step = step
+                # record to bad_posture_log and enqueue upload
+                try:
+                    self.update_bad_posture_log('khong thay nguoi', delta)
+                except Exception as e:
+                    print('Failed to log no-person to Drive:', e)
+
+            # For UI alerts, keep the existing 60s rule
+            if duration >= 60:
+                if not self.last_alert_time or (current_time - self.last_alert_time).total_seconds() >= 60:
+                    self.last_alert_time = current_time
+                    alert_message = "Không phát hiện người \ntrong 1 phút"
+                    self.recent_alerts.appendleft((current_time, alert_message))
+                    self.alerts_count += 1
+                    self.root.after(0, self.update_alerts_display)
+
             return
         else:
             if hasattr(self, 'no_person_start_time'):
@@ -1392,8 +1427,10 @@ class PostureMonitoringGUI:
                  padx=20, pady=8, relief='flat').pack(pady=10)
         
     def setup_google_drive(self):
-        self.gauth = GoogleAuth()
-        self.gauth.LoadCredentialsFile("token.json")
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        os.chdir(base_dir)
+        settings_path = os.path.join(base_dir, "settings.yaml")
+        self.gauth = GoogleAuth(settings_path)
 
         if self.gauth.credentials is None:
             self.gauth.CommandLineAuth()
@@ -1404,69 +1441,92 @@ class PostureMonitoringGUI:
 
         self.gauth.SaveCredentialsFile("token.json")
         self.drive = GoogleDrive(self.gauth)
+
         print("Google Drive connected")
 
-    def send_drive_alert(self, posture, duration):
-        # Enqueue the alert for background upload to avoid blocking
-        try:
-            self.drive_queue.put((posture, duration))
-        except Exception as e:
-            print("Failed to queue drive alert:", e)
+    def update_bad_posture_log(self, posture, duration):
+        # Nếu chưa có mục này → khởi tạo start_time và tổng thời gian
+        if posture not in self.bad_posture_log:
+            self.bad_posture_log[posture] = {
+                "start_time": datetime.now(),
+                "total_duration": duration
+            }
+        else:
+            # Cộng dồn thời gian (không ghi đè) — cập nhật tổng thời gian
+            try:
+                self.bad_posture_log[posture]["total_duration"] += duration
+            except Exception:
+                # Fall back: ghi đè nếu có lỗi cấu trúc
+                self.bad_posture_log[posture]["total_duration"] = duration
+
+        # Gửi yêu cầu upload (không block)
+        self.drive_queue.put(posture)
+
+    def write_posture_log_to_drive(self):
+        lines = []
+        for posture, info in self.bad_posture_log.items():
+            t = info["start_time"].strftime("%Y-%m-%d %H:%M:%S")
+            d = info["total_duration"]
+            lines.append(f"{t} — {posture} — {d:.1f} giây")
+
+        content = "\n".join(lines)
+
+        file_list = self.drive.ListFile(
+            {'q': "title='posture_alerts.txt' and trashed=false"}
+        ).GetList()
+
+        if file_list:
+            file = file_list[0]
+            file.SetContentString(content)
+        else:
+            file = self.drive.CreateFile({'title': 'posture_alerts.txt'})
+            file.SetContentString(content)
+
+        file.Upload()
+
+    def process_posture(self, posture):
+        now = time.time()
+
+        if self.active_posture is None: # Lần đầu phát hiện
+            self.active_posture = posture
+            self.active_start_time = now
+            self.last_logged_step = 0
+            return
+        
+        if posture != self.active_posture:  # Phát hiện tư thế khác → reset
+            self.active_posture = posture
+            self.active_start_time = now
+            self.last_logged_step = 0
+            return
+
+        duration = now - self.active_start_time # Cùng tư thế → tính thời gian liên tục
+        step = int(duration // 10)   # mốc 10s, 20s, 30s...
+
+        # Chỉ update khi vượt mốc mới — truyền delta (không truyền cumulative)
+        if step >= 1 and step > self.last_logged_step:
+            # delta = phần thời gian mới kể từ mốc trước (ví dụ: lần đầu 10s, lần sau +10s...)
+            delta = duration - (self.last_logged_step * 10)
+            if delta < 0:
+                delta = duration
+            self.last_logged_step = step
+            self.update_bad_posture_log(self.active_posture, delta)
+
 
     def _drive_worker(self):
-        """Background worker that uploads alerts from the queue to Google Drive."""
         while True:
+            posture = self.drive_queue.get()
+            if posture is None:
+                break
+
             try:
-                item = self.drive_queue.get()
-                if item is None:
-                    break
-                posture, duration = item
-
-                # Ensure Drive is connected
-                if self.drive is None:
-                    try:
-                        self.setup_google_drive()
-                    except Exception as e:
-                        print("Drive auth failed in worker:", e)
-
-                if self.drive is None:
-                    # Requeue and wait
-                    print("Drive not available, will retry upload")
-                    time.sleep(5)
-                    self.drive_queue.put(item)
-                    self.drive_queue.task_done()
-                    continue
-
-                try:
-                    content = f"{time.strftime('%Y-%m-%d %H:%M:%S')} — {posture} — {duration:.1f} giây\n"
-
-                    # Try to update existing file if present, otherwise create
-                    file_list = self.drive.ListFile({'q': "title = 'posture_alerts.txt' and trashed=false"}).GetList()
-                    if file_list:
-                        file = file_list[0]
-                        try:
-                            existing = file.GetContentString()
-                        except Exception:
-                            existing = ""
-                        new_content = existing + content
-                        file.SetContentString(new_content)
-                    else:
-                        file = self.drive.CreateFile({'title': 'posture_alerts.txt'})
-                        file.SetContentString(content)
-
-                    file.Upload()
-                    print("Drive alert uploaded")
-                except Exception as e:
-                    print("Upload alert failed in worker:", e)
-                    # simple retry: requeue after delay
-                    time.sleep(5)
-                    self.drive_queue.put(item)
-
-                self.drive_queue.task_done()
+                self.write_posture_log_to_drive()
+                print("Drive file updated")
             except Exception as e:
-                print("Drive worker exception:", e)
-                time.sleep(1)
+                print("Drive upload failed:", e)
+                time.sleep(5)
+                self.drive_queue.put(posture)
 
+            self.drive_queue.task_done()
     
     def show_help(self):
         """Hiển thị hướng dẫn"""
